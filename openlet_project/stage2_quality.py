@@ -43,12 +43,14 @@ INDICATOR_DIRECTIONS = {
 
 
 def _safe_ratio(numerator, denominator):
+    """安全计算比例，并把结果限制在 0 到 1 之间。"""
     if denominator is None or denominator <= 0:
         return np.nan
     return float(np.clip(numerator / denominator, 0.0, 1.0))
 
 
 def _safe_mean(values):
+    """计算列表均值，自动跳过 NaN 或空值。"""
     values = [v for v in values if pd.notna(v)]
     if len(values) == 0:
         return np.nan
@@ -56,6 +58,7 @@ def _safe_mean(values):
 
 
 def _finite_array(seq):
+    """把输入序列统一转成二维浮点数组，方便后续按时间维处理。"""
     arr = np.asarray(seq, dtype=float)
     if arr.ndim == 1:
         arr = arr.reshape(-1, 1)
@@ -63,6 +66,7 @@ def _finite_array(seq):
 
 
 def uniform_sample_indices(n_total, max_samples):
+    """从总帧数里均匀抽取最多 max_samples 个索引。"""
     if n_total <= 0:
         return np.array([], dtype=int)
     if n_total <= max_samples:
@@ -71,6 +75,7 @@ def uniform_sample_indices(n_total, max_samples):
 
 
 def decode_image_bytes(img_bytes, mode):
+    """把 H5 里保存的图片字节流解码成 numpy 图像数组。"""
     if img_bytes is None or len(img_bytes) == 0:
         return None
     try:
@@ -83,6 +88,7 @@ def decode_image_bytes(img_bytes, mode):
 
 
 def simple_kmeans(X, n_clusters, random_state=42, max_iter=100):
+    """用 numpy 实现一个轻量版 KMeans，避免额外依赖 sklearn。"""
     X = np.asarray(X, dtype=float)
     rng = np.random.default_rng(random_state)
     if len(X) <= n_clusters:
@@ -107,6 +113,7 @@ def simple_kmeans(X, n_clusters, random_state=42, max_iter=100):
 
 
 def normalized_mutual_information(labels_a, labels_b):
+    """计算两个离散序列的归一化互信息，用于衡量视觉变化和动作变化的关联。"""
     labels_a = np.asarray(labels_a)
     labels_b = np.asarray(labels_b)
     if len(labels_a) == 0 or len(labels_a) != len(labels_b):
@@ -140,6 +147,7 @@ def normalized_mutual_information(labels_a, labels_b):
 
 
 def _robust_zscore(values):
+    """计算稳健 z-score，用中位数和 MAD 降低极端值影响。"""
     values = np.asarray(values, dtype=float)
     median = np.nanmedian(values)
     mad = np.nanmedian(np.abs(values - median))
@@ -152,6 +160,7 @@ def _robust_zscore(values):
 
 
 def load_stage2_inputs():
+    """读取阶段2所需的阶段1输出文件。"""
     manifest_path = os.path.join(CONFIG["interim_dir"], "s3_manifest.csv")
     metadata_path = os.path.join(CONFIG["interim_dir"], "s3_raw_metadata.csv")
     aligned_path = os.path.join(CONFIG["interim_dir"], "s3_aligned_data.pkl")
@@ -190,6 +199,7 @@ def load_stage2_inputs():
 
 
 def compute_visual_completeness(aligned, expected_fps=30.0):
+    """C3：计算视觉帧完整性，即实际匹配帧数和理论 30fps 帧数的比例。"""
     duration_s = float(aligned["time_grid_s"][-1]) if len(aligned["time_grid_s"]) > 0 else 0.0
     expected_frames = max(1.0, duration_s * expected_fps)
     ratios = []
@@ -203,6 +213,7 @@ def compute_visual_completeness(aligned, expected_fps=30.0):
 
 
 def compute_depth_validity(feature_row):
+    """C4：根据深度图空洞率计算深度图有效性，空洞越少分数越高。"""
     hole_cols = [col for col in feature_row.index if col.endswith("_depth_hole_ratio")]
     hole_ratio = _safe_mean([feature_row[col] for col in hole_cols])
     if pd.isna(hole_ratio):
@@ -211,6 +222,7 @@ def compute_depth_validity(feature_row):
 
 
 def compute_joint_completeness(aligned):
+    """C5：计算关节数据完整性，综合时间轴长度和 NaN 缺失情况。"""
     time_grid = np.asarray(aligned["time_grid_s"], dtype=float)
     duration_s = float(time_grid[-1]) if len(time_grid) > 0 else 0.0
     expected_len = int(np.floor(duration_s * 100.0)) + 1
@@ -228,6 +240,7 @@ def compute_joint_completeness(aligned):
 
 
 def compute_attribute_completeness(manifest_row, metadata_row):
+    """C6：检查轨迹清单和元数据中关键字段是否齐全。"""
     required_values = [
         manifest_row.get("scene_id"),
         manifest_row.get("task_name"),
@@ -243,6 +256,7 @@ def compute_attribute_completeness(manifest_row, metadata_row):
 
 
 def compute_joint_anomaly_quality(aligned):
+    """C8：用速度、加速度、jerk 的异常比例估计关节数据质量。"""
     seq = _finite_array(aligned["arm_state_100hz"])
     if len(seq) < 4:
         return np.nan
@@ -268,6 +282,7 @@ def compute_joint_anomaly_quality(aligned):
 
 
 def compute_joint_noise_quality(aligned):
+    """C10：用二阶差分的高频能量占比估计关节噪声，噪声越小分数越高。"""
     seq = _finite_array(aligned["arm_state_100hz"])
     if len(seq) < 4:
         return np.nan
@@ -285,6 +300,7 @@ def compute_joint_noise_quality(aligned):
 
 
 def _timestamp_consistency_one(timestamp_ns):
+    """计算单个时间戳序列的单调性和连续性。"""
     if timestamp_ns is None:
         return np.nan
     ts = np.asarray(timestamp_ns, dtype=np.int64)
@@ -303,6 +319,7 @@ def _timestamp_consistency_one(timestamp_ns):
 
 
 def compute_timestamp_consistency(file_path):
+    """C11：回读原始 H5，综合检查关节和相机时间戳是否连续递增。"""
     try:
         from stage1_read_and_manifest import read_one_h5
 
@@ -323,6 +340,7 @@ def compute_timestamp_consistency(file_path):
 
 
 def compute_dataset_entropy(series):
+    """计算某个类别字段在全数据集上的归一化熵。"""
     values = series.dropna().astype(str)
     if len(values) == 0:
         return np.nan
@@ -333,6 +351,7 @@ def compute_dataset_entropy(series):
 
 
 def compute_object_diversity(manifest_df):
+    """C13：计算操作物体多样性；当前单物体场景通常接近 0。"""
     if "object_id" not in manifest_df or len(manifest_df) == 0:
         return np.nan
     unique_n = manifest_df["object_id"].dropna().nunique()
@@ -340,6 +359,7 @@ def compute_object_diversity(manifest_df):
 
 
 def compute_atomic_skill_diversity(feature_row):
+    """C14：根据阶段1的离散语义状态占比，计算原子技能多样性。"""
     ratio_cols = [
         "semantic_state_ratio_0",
         "semantic_state_ratio_1",
@@ -354,6 +374,7 @@ def compute_atomic_skill_diversity(feature_row):
 
 
 def build_motion_mode_diversity(feature_df):
+    """C15：对关节运动特征聚类，用轨迹所在簇的稀有度表示运动模式多样性。"""
     feature_cols = [
         col for col in feature_df.columns
         if col.startswith("arm_state_range_")
@@ -382,6 +403,7 @@ def build_motion_mode_diversity(feature_df):
 
 
 def compute_multimodal_alignment(aligned, max_allowed_offset_s=0.05):
+    """C16：根据图像帧和最近动作帧的时间偏移计算多模态对齐度。"""
     offset_means = []
     for cam_match in aligned.get("camera_matches", {}).values():
         for stream_name in ["color", "depth"]:
@@ -397,6 +419,7 @@ def compute_multimodal_alignment(aligned, max_allowed_offset_s=0.05):
 
 
 def _discretize_for_mi(values, n_bins=5):
+    """把连续信号按分位数离散化，供互信息计算使用。"""
     values = np.asarray(values, dtype=float)
     if len(values) == 0 or np.nanstd(values) <= 1e-12:
         return np.zeros(len(values), dtype=int)
@@ -407,6 +430,7 @@ def _discretize_for_mi(values, n_bins=5):
 
 
 def compute_visual_joint_mi(file_path, aligned, max_frames=80):
+    """C17：用图像亮度变化和动作幅值变化的互信息近似视觉-关节一致性。"""
     try:
         from stage1_read_and_manifest import read_one_h5
 
@@ -447,6 +471,7 @@ def compute_visual_joint_mi(file_path, aligned, max_frames=80):
 
 
 def compute_joint_coordination(aligned):
+    """C18：用关节通道之间的平均相关性近似关节间运动协调性。"""
     seq = _finite_array(aligned["arm_state_100hz"])
     if len(seq) < 3 or seq.shape[1] < 2:
         return np.nan
@@ -463,6 +488,7 @@ def compute_joint_coordination(aligned):
 
 
 def build_duplicate_uniqueness(feature_df):
+    """C19：用特征空间最近邻距离估计轨迹是否重复，距离越大唯一性越高。"""
     numeric_cols = [
         col for col in feature_df.columns
         if col not in ["trajectory_id", "scene_id", "task_name"]
@@ -491,6 +517,7 @@ def build_duplicate_uniqueness(feature_df):
 
 
 def compute_label_completeness(final_label_row):
+    """C21：检查该轨迹是否已经有最终成功/失败标签。"""
     if final_label_row is None:
         return 0.0
     value = final_label_row.get("final_label", np.nan)
@@ -498,6 +525,7 @@ def compute_label_completeness(final_label_row):
 
 
 def compute_scene_description_completeness(manifest_row, metadata_row):
+    """C23：检查场景、任务、物体、设备等描述字段的完整程度。"""
     fields = [
         manifest_row.get("scene_id"),
         manifest_row.get("task_name"),
@@ -514,6 +542,7 @@ def compute_scene_description_completeness(manifest_row, metadata_row):
 
 
 def compute_quality_indicators(manifest_df, metadata_df, feature_df, final_label_df, aligned_dict):
+    """汇总计算每条轨迹的 18 个阶段2原始质量指标。"""
     metadata_map = metadata_df.set_index("trajectory_id").to_dict(orient="index") if len(metadata_df) > 0 else {}
     feature_map = feature_df.set_index("trajectory_id").to_dict(orient="index") if len(feature_df) > 0 else {}
     label_map = final_label_df.set_index("trajectory_id").to_dict(orient="index") if len(final_label_df) > 0 else {}
@@ -563,6 +592,7 @@ def compute_quality_indicators(manifest_df, metadata_df, feature_df, final_label
 
 
 def minmax_normalize_indicators(indicator_df):
+    """把 18 个原始指标统一 Min-Max 归一化到 0 到 1。"""
     norm_df = indicator_df[["trajectory_id", "scene_id", "task_name"]].copy()
     details = {}
 
@@ -593,6 +623,7 @@ def minmax_normalize_indicators(indicator_df):
 
 
 def compute_entropy_weights(norm_df):
+    """用熵权法根据指标区分度自动计算 18 个指标的权重。"""
     cols = list(INDICATOR_DIRECTIONS.keys())
     X = norm_df[cols].to_numpy(dtype=float)
     X = np.nan_to_num(X, nan=0.0, posinf=1.0, neginf=0.0)
@@ -626,6 +657,7 @@ def compute_entropy_weights(norm_df):
 
 
 def compute_quality_scores(norm_df, weight_df):
+    """根据熵权合成综合 Q_score，并计算五个维度分量分数。"""
     cols = list(INDICATOR_DIRECTIONS.keys())
     weight_map = weight_df.set_index("indicator")["weight"].to_dict()
 
@@ -652,6 +684,7 @@ def compute_quality_scores(norm_df, weight_df):
 
 
 def compute_pca_robustness(norm_df, score_df):
+    """用 PCA 第一主成分和 Q_score 做相关性检查，作为稳健性参考。"""
     cols = list(INDICATOR_DIRECTIONS.keys())
     X = norm_df[cols].to_numpy(dtype=float)
     X = np.nan_to_num(X, nan=0.5, posinf=1.0, neginf=0.0)
@@ -679,6 +712,7 @@ def compute_pca_robustness(norm_df, score_df):
 
 
 def save_stage2_outputs(indicator_df, norm_df, weight_df, score_df, norm_details, pca_info):
+    """保存阶段2的原始指标、归一化指标、权重、质量分数和检查信息。"""
     raw_path = os.path.join(CONFIG["interim_dir"], "s3_quality_indicators_raw.csv")
     norm_path = os.path.join(CONFIG["interim_dir"], "s3_quality_indicators_norm.csv")
     weights_path = os.path.join(CONFIG["interim_dir"], "s3_quality_entropy_weights.csv")
@@ -697,6 +731,7 @@ def save_stage2_outputs(indicator_df, norm_df, weight_df, score_df, norm_details
 
 
 def run_stage2_quality():
+    """阶段2总入口：读取阶段1结果，计算指标、权重、分数并保存文件。"""
     manifest_df, metadata_df, feature_df, final_label_df, aligned_dict = load_stage2_inputs()
 
     indicator_df = compute_quality_indicators(
