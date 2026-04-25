@@ -1,0 +1,3 @@
+﻿trajectory_id,auto_label,review_needed,label_reason,manual_label,final_label
+ff3cd4d8b3234a89bececbd6dd1eb0a4,0,True,arm_motion_too_small,,0
+ffedcab981ba4f19b105c7ce20c346ba,0,True,duration_too_short|no_stable_grasp_segment,,0

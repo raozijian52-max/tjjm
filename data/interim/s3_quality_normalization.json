@@ -1,0 +1,110 @@
+{
+  "C3_visual_completeness": {
+    "min": 0.9972816853550799,
+    "max": 0.9984871406959153,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C4_depth_validity": {
+    "min": 0.74674072265625,
+    "max": 0.7643003110532408,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C5_joint_completeness": {
+    "min": 0.999618320610687,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C6_attribute_completeness": {
+    "min": 1.0,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C8_joint_anomaly_quality": {
+    "min": 0.8776758409785933,
+    "max": 0.9122541603630863,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C10_joint_noise_quality": {
+    "min": 0.9999609690784861,
+    "max": 0.999987103068335,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C11_timestamp_consistency": {
+    "min": 0.999381235467005,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C12_scene_entropy": {
+    "min": -1.4428232973175177e-12,
+    "max": -1.4428232973175177e-12,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C13_object_diversity": {
+    "min": 0.0,
+    "max": 0.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C14_atomic_skill_diversity": {
+    "min": 0.6058660422197321,
+    "max": 0.6281187348313385,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C15_motion_mode_diversity": {
+    "min": 0.0,
+    "max": 0.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C16_multimodal_alignment": {
+    "min": 0.9496421243931096,
+    "max": 0.9501645772144047,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C17_visual_joint_mi": {
+    "min": 0.32692649468102486,
+    "max": 0.36708157916455986,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C18_joint_coordination": {
+    "min": 0.4844961802642698,
+    "max": 0.62629591560638,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C19_duplicate_uniqueness": {
+    "min": 1.0,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C21_label_completeness": {
+    "min": 1.0,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C22_metadata_standardization": {
+    "min": 1.0,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  },
+  "C23_scene_description_completeness": {
+    "min": 1.0,
+    "max": 1.0,
+    "direction": 1,
+    "missing_ratio": 0.0
+  }
+}
