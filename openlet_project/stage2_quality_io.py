@@ -7,8 +7,13 @@ from config import CONFIG
 from utils import save_csv, save_json
 
 
+LAST_STAGE2_SCENE_PREFIX = None
+
+
 def load_stage2_inputs():
     """读取阶段2所需的阶段1输出文件。"""
+    global LAST_STAGE2_SCENE_PREFIX
+
     interim_dir = CONFIG["interim_dir"]
 
     # 自动识别当前可用的场景前缀（如 s1/s2/s3）
@@ -30,6 +35,7 @@ def load_stage2_inputs():
     if scene_prefix is None:
         scene_prefix = "s3"
 
+    LAST_STAGE2_SCENE_PREFIX = scene_prefix
     print(f"[Stage2] 当前读取场景前缀: {scene_prefix}")
 
     manifest_path = os.path.join(interim_dir, f"{scene_prefix}_manifest.csv")
@@ -70,13 +76,15 @@ def load_stage2_inputs():
 
 def save_stage2_outputs(indicator_df, norm_df, weight_df, score_df, norm_details, pca_info):
     """保存阶段2的原始指标、归一化指标、权重、质量分数和检查信息。"""
-    raw_path = os.path.join(CONFIG["interim_dir"], "s3_quality_indicators_raw.csv")
-    norm_path = os.path.join(CONFIG["interim_dir"], "s3_quality_indicators_norm.csv")
-    weights_path = os.path.join(CONFIG["interim_dir"], "s3_quality_entropy_weights.csv")
-    scores_path = os.path.join(CONFIG["interim_dir"], "s3_quality_scores.csv")
-    details_path = os.path.join(CONFIG["interim_dir"], "s3_quality_normalization.json")
-    pca_path = os.path.join(CONFIG["interim_dir"], "s3_quality_pca_check.json")
-    processed_path = os.path.join(CONFIG["processed_dir"], "s3_stage2_quality_dataset.csv")
+    scene_prefix = LAST_STAGE2_SCENE_PREFIX or "s3"
+
+    raw_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_indicators_raw.csv")
+    norm_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_indicators_norm.csv")
+    weights_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_entropy_weights.csv")
+    scores_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_scores.csv")
+    details_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_normalization.json")
+    pca_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_pca_check.json")
+    processed_path = os.path.join(CONFIG["processed_dir"], f"{scene_prefix}_stage2_quality_dataset.csv")
 
     save_csv(indicator_df, raw_path)
     save_csv(norm_df, norm_path)
