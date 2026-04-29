@@ -204,6 +204,22 @@ def build_bc_dataset(all_aligned, global_ids):
     return X_all, y_all, sample_meta_df
 
 
+# 基于所有训练轨迹动作，计算统一评估用的动作标准差
+# 输入：全部对齐数据、split_df
+# 输出：eval_y_std，形状为 (14,)
+def compute_common_eval_action_std(all_aligned, split_df):
+    train_ids = split_df[split_df["split"] == "train"]["global_id"].tolist()
+
+    _, y_train_all, _ = build_bc_dataset(all_aligned, train_ids)
+
+    eval_y_std = np.nanstd(y_train_all, axis=0).astype(np.float32)
+
+    # 防止某些动作维度方差极小导致除零
+    eval_y_std[eval_y_std < 1e-8] = 1.0
+
+    return eval_y_std
+
+
 # MLP 行为克隆模型
 # 输入：window_size * 14 维状态窗口
 # 输出：14 维动作
@@ -334,15 +350,18 @@ def predict_bc(model, X, X_scaler, y_scaler):
 
 
 # 计算 BC 离线指标
-# 输入：真实动作、预测动作、标准化真实动作、标准化预测动作
+# 输入：真实动作、预测动作、统一评估动作标准差
 # 输出：指标字典
-def compute_bc_metrics(y_true, y_pred, y_true_s, y_pred_s):
+def compute_bc_metrics(y_true, y_pred, eval_y_std):
     mse = float(np.mean((y_pred - y_true) ** 2))
     mae = float(np.mean(np.abs(y_pred - y_true)))
 
-    normalized_mse = float(np.mean((y_pred_s - y_true_s) ** 2))
+    # 使用统一动作标准差进行评估归一化
+    # 注意：这里不再使用每个模型自己的 y_scaler，以保证 base 和 leave-one 可比较
+    error_norm = (y_pred - y_true) / eval_y_std.reshape(1, -1)
+    normalized_mse = float(np.mean(error_norm ** 2))
 
-    # 分数越高越好，范围大致在 0~1，误差越小越接近 1
+    # 分数越高越好；所有模型共用同一评估尺度
     imitation_score = float(np.exp(-normalized_mse))
 
     return {
@@ -357,9 +376,8 @@ def compute_bc_metrics(y_true, y_pred, y_true_s, y_pred_s):
 # 按场景评估模型
 # 输入：模型、scaler、验证集 X/y/meta
 # 输出：每个场景一行指标
-def evaluate_model_by_scene(model, X_val, y_val, meta_val_df, X_scaler, y_scaler):
-    y_pred, y_pred_s = predict_bc(model, X_val, X_scaler, y_scaler)
-    y_val_s = y_scaler.transform(y_val).astype(np.float32)
+def evaluate_model_by_scene(model, X_val, y_val, meta_val_df, X_scaler, y_scaler, eval_y_std):
+    y_pred, _ = predict_bc(model, X_val, X_scaler, y_scaler)
 
     rows = []
 
@@ -369,8 +387,7 @@ def evaluate_model_by_scene(model, X_val, y_val, meta_val_df, X_scaler, y_scaler
         metrics = compute_bc_metrics(
             y_true=y_val[idx],
             y_pred=y_pred[idx],
-            y_true_s=y_val_s[idx],
-            y_pred_s=y_pred_s[idx],
+            eval_y_std=eval_y_std,
         )
 
         metrics["scene_id"] = scene_id
@@ -383,7 +400,7 @@ def evaluate_model_by_scene(model, X_val, y_val, meta_val_df, X_scaler, y_scaler
 # 训练全数据 base BC 模型
 # 输入：全部对齐数据与 split 表
 # 输出：base metrics、训练日志、模型组件
-def train_and_eval_base_model(all_aligned, split_df):
+def train_and_eval_base_model(all_aligned, split_df, eval_y_std):
     train_ids = split_df[split_df["split"] == "train"]["global_id"].tolist()
     val_ids = split_df[split_df["split"] == "val"]["global_id"].tolist()
 
@@ -404,6 +421,7 @@ def train_and_eval_base_model(all_aligned, split_df):
         meta_val_df=meta_val_df,
         X_scaler=X_scaler,
         y_scaler=y_scaler,
+        eval_y_std=eval_y_std,
     )
 
     base_metrics_df["model_type"] = "base_all_scenes"
@@ -414,7 +432,7 @@ def train_and_eval_base_model(all_aligned, split_df):
 # 训练留一场景模型并评估
 # 输入：全部对齐数据与 split 表
 # 输出：leave-one 指标表
-def train_and_eval_leave_one_models(all_aligned, split_df):
+def train_and_eval_leave_one_models(all_aligned, split_df, eval_y_std):
     rows = []
 
     scene_ids = CONFIG["scene_ids"]
@@ -465,6 +483,7 @@ def train_and_eval_leave_one_models(all_aligned, split_df):
             meta_val_df=meta_val_df,
             X_scaler=X_scaler,
             y_scaler=y_scaler,
+            eval_y_std=eval_y_std,
         )
 
         # 这里只会有 heldout_scene 一行
@@ -555,7 +574,7 @@ def save_stage3_outputs(split_df, base_metrics_df, leave_one_metrics_df, delta_d
 def run_stage3_bc_value():
     set_seed(CONFIG["random_state"])
 
-    # 1. 读取 S1-S5 对齐数据
+    # 1. 读取 S1-S5 或当前配置中的多场景对齐数据
     all_aligned, traj_info_df = load_all_scenes_aligned_data(CONFIG["scene_ids"])
     print("数据读取成功。")
 
@@ -563,17 +582,25 @@ def run_stage3_bc_value():
     split_df = build_trajectory_split(traj_info_df)
     print("训练测试集构造成功，开始训练base模型：")
 
-    # 3. 训练全数据 base 模型，并在每个场景验证集上评估
-    base_metrics_df, train_log_df, _, _, _ = train_and_eval_base_model(
+    # 3. 基于所有训练轨迹动作，计算统一评估尺度
+    eval_y_std = compute_common_eval_action_std(
         all_aligned=all_aligned,
         split_df=split_df,
     )
 
-    # 4. 训练 leave-one-scene 模型，并评估被留出场景
+    # 4. 训练全数据 base 模型，并在每个场景验证集上评估
+    base_metrics_df, train_log_df, _, _, _ = train_and_eval_base_model(
+        all_aligned=all_aligned,
+        split_df=split_df,
+        eval_y_std=eval_y_std,
+    )
+
+    # 5. 训练 leave-one-scene 模型，并评估被留出场景
     print("开始训练留一模型")
     leave_one_metrics_df = train_and_eval_leave_one_models(
         all_aligned=all_aligned,
         split_df=split_df,
+        eval_y_std=eval_y_std,
     )
 
     # 5. 计算场景边际价值

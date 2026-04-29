@@ -1,5 +1,7 @@
 # 文件位置：run_stage3_step1.py
 
+import pandas as pd
+
 from config import ensure_dirs
 from stage3_bc_value import run_stage3_bc_value
 
@@ -10,6 +12,11 @@ def main():
     ensure_dirs()
 
     base_metrics_df, leave_one_metrics_df, delta_df = run_stage3_bc_value()
+
+    split_df = pd.read_csv("./data/interim/s_all_bc_split.csv")
+
+    print("\n[0] 轨迹级 train/val 划分统计")
+    print(split_df.groupby(["scene_id", "split"]).size())
 
     print("=" * 60)
     print("阶段三完成：离线 BC 效能评估 + 留一场景边际价值")
