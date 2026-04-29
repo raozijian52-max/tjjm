@@ -2,6 +2,7 @@
 
 import json
 import os
+import tarfile
 
 import h5py
 import numpy as np
@@ -9,6 +10,68 @@ import pandas as pd
 
 from config import CONFIG
 from utils import is_uuid_like, save_csv, to_python
+
+
+TAR_EXTENSIONS = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2")
+
+
+def is_tar_file(file_name):
+    return file_name.lower().endswith(TAR_EXTENSIONS)
+
+
+def is_h5_file(file_name):
+    return file_name.lower().endswith(".h5")
+
+
+def safe_member_parts(member_name):
+    # Keep tar members inside our extraction folder and avoid absolute/parent paths.
+    normalized = member_name.replace("\\", "/")
+    parts = []
+    for part in normalized.split("/"):
+        if part in ("", ".", ".."):
+            continue
+        parts.append(part)
+    return parts
+
+
+def extract_h5_from_tar(tar_path):
+    extract_root = os.path.join(CONFIG["interim_dir"], "extracted_h5")
+    tar_stem = os.path.basename(tar_path)
+    for suffix in [".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar"]:
+        if tar_stem.lower().endswith(suffix):
+            tar_stem = tar_stem[: -len(suffix)]
+            break
+
+    output_root = os.path.join(extract_root, tar_stem)
+    extracted_files = []
+
+    with tarfile.open(tar_path, "r:*") as tar:
+        for member in tar.getmembers():
+            if not member.isfile() or not is_h5_file(member.name):
+                continue
+
+            parts = safe_member_parts(member.name)
+            if not parts:
+                continue
+
+            output_path = os.path.join(output_root, *parts)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            source = tar.extractfile(member)
+            if source is None:
+                continue
+
+            with source, open(output_path, "wb") as f:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+            extracted_files.append(output_path)
+
+    extracted_files.sort()
+    return extracted_files
 
 
 # 读取 H5 对象的属性
@@ -286,9 +349,16 @@ def scan_h5_files():
     raw_dir = CONFIG["raw_dir"]
     files = []
 
-    for file_name in os.listdir(raw_dir):
-        if file_name.endswith(".h5"):
-            files.append(os.path.join(raw_dir, file_name))
+    for dir_path, _, file_names in os.walk(raw_dir):
+        for file_name in file_names:
+            file_path = os.path.join(dir_path, file_name)
+
+            if is_h5_file(file_name):
+                files.append(file_path)
+                continue
+
+            if is_tar_file(file_name):
+                files.extend(extract_h5_from_tar(file_path))
 
     files.sort()
     return files

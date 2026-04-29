@@ -1,0 +1,7 @@
+{
+  "min_duration_s": 6.547,
+  "min_arm_range_l1": 0.3023917572669764,
+  "min_effector_range_l1": 41.666666666666664,
+  "min_effector_peak_offset_l1": 41.666666666666664,
+  "min_stable_grasp_segment_s": 2.6260000000000003
+}
