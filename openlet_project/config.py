@@ -10,10 +10,10 @@ CONFIG = {
     "project_root": ".",
 
     # 原始数据目录
-    "raw_dir": r"../../original_data/s4_零件下线-将流水线上的零件放到旁边货架上的收纳箱中/h5", # s5_小型工具装箱-将货架上的零件放置在旁边桌面上的固定位
+    "raw_dir": r"../../original_data/s5_小型工具装箱-将货架上的零件放置在旁边桌面上的固定位置/h5",
 
     # 中间结果目录
-    "interim_dir": "./data/interim/s4",
+    "interim_dir": "./data/interim",
 
     # 最终结果目录
     "processed_dir": "./data/processed",
@@ -27,20 +27,20 @@ CONFIG = {
     # "task_name": "FMCG_placing",
     # "object_id": "FMCG",
 
-    "scene_id": "S4",
-    "task_name": "parts_offline_into_box",
-    "object_id": "parts",
+    # "scene_id": "S4",
+    # "task_name": "parts_offline_into_box",
+    # "object_id": "parts",
 
-    # "scene_id": "S5",
-    # "task_name": "small_tool_packing",
-    # "object_id": "parts_on_shelf",
+    "scene_id": "S5",
+    "task_name": "small_tool_packing",
+    "object_id": "parts_on_shelf",
 
 
     # 多场景列表：阶段三正式使用 S1-S5
-    "scene_ids": ["S1", "S2", "S3"], # ["S1", "S2", "S3", "S4", "S5"]
+    "scene_ids": ["S1", "S2", "S3", "S4", "S5"], # ["S1", "S2", "S3", "S4", "S5"]
 
     # 当前场景数据规模，仅保留给阶段一检查使用
-    "expected_num_trajectories": 38,
+    "expected_num_trajectories": 33,
 
     # 主关节组
     "main_action_group": "arm",
