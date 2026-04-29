@@ -23,7 +23,10 @@ CONFIG = {
     "task_name": "single_item_grasp",
     "object_id": "single_product_constant",
 
-    # 当前数据规模
+    # 多场景列表：阶段三正式使用 S1-S5
+    "scene_ids": ["S1", "S2", "S3", "S4", "S5"],
+
+    # 当前 S3 数据规模，仅保留给阶段一检查使用
     "expected_num_trajectories": 146,
 
     # 主关节组
@@ -34,9 +37,19 @@ CONFIG = {
     # 保留的相机视角
     "camera_names": ["head", "hand_left", "hand_right"],
 
-    # 训练验证划分参数
+    # 训练验证划分参数：阶段三按轨迹划分，不做帧级随机划分
     "train_ratio": 0.8,
     "random_state": 42,
+
+    # 阶段三 BC 参数
+    "bc_window_size": 5,
+    "bc_sample_stride": 2,
+    "bc_batch_size": 512,
+    "bc_epochs": 35,
+    "bc_learning_rate": 1e-3,
+    "bc_hidden_dims": [128, 128],
+    "bc_weight_decay": 1e-5,
+    "bc_num_workers": 0,
 }
 
 
