@@ -9,11 +9,34 @@ from utils import save_csv, save_json
 
 def load_stage2_inputs():
     """读取阶段2所需的阶段1输出文件。"""
-    manifest_path = os.path.join(CONFIG["interim_dir"], "s3_manifest.csv")
-    metadata_path = os.path.join(CONFIG["interim_dir"], "s3_raw_metadata.csv")
-    aligned_path = os.path.join(CONFIG["interim_dir"], "s3_aligned_data.pkl")
-    feature_path = os.path.join(CONFIG["interim_dir"], "s3_feature_matrix.csv")
-    final_label_path = os.path.join(CONFIG["interim_dir"], "s3_final_labels.csv")
+    interim_dir = CONFIG["interim_dir"]
+
+    # 自动识别当前可用的场景前缀（如 s1/s2/s3）
+    scene_prefix = None
+    for name in sorted(os.listdir(interim_dir)):
+        if name.endswith("_manifest.csv") and name.startswith("s"):
+            candidate = name.split("_", 1)[0]
+            required_paths = [
+                os.path.join(interim_dir, f"{candidate}_manifest.csv"),
+                os.path.join(interim_dir, f"{candidate}_raw_metadata.csv"),
+                os.path.join(interim_dir, f"{candidate}_aligned_data.pkl"),
+                os.path.join(interim_dir, f"{candidate}_feature_matrix.csv"),
+                os.path.join(interim_dir, f"{candidate}_final_labels.csv"),
+            ]
+            if all(os.path.exists(p) for p in required_paths):
+                scene_prefix = candidate
+                break
+
+    if scene_prefix is None:
+        scene_prefix = "s3"
+
+    print(f"[Stage2] 当前读取场景前缀: {scene_prefix}")
+
+    manifest_path = os.path.join(interim_dir, f"{scene_prefix}_manifest.csv")
+    metadata_path = os.path.join(interim_dir, f"{scene_prefix}_raw_metadata.csv")
+    aligned_path = os.path.join(interim_dir, f"{scene_prefix}_aligned_data.pkl")
+    feature_path = os.path.join(interim_dir, f"{scene_prefix}_feature_matrix.csv")
+    final_label_path = os.path.join(interim_dir, f"{scene_prefix}_final_labels.csv")
 
     missing = [
         path for path in [manifest_path, metadata_path, aligned_path, feature_path, final_label_path]

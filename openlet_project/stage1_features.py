@@ -9,7 +9,7 @@ import pandas as pd
 from PIL import Image, UnidentifiedImageError
 from sklearn.decomposition import PCA
 
-from config import CONFIG
+from config import CONFIG, get_scene_prefix
 from stage1_read_and_manifest import read_one_h5
 from utils import save_csv, save_json
 
@@ -535,9 +535,10 @@ def extract_one_trajectory_features(trajectory_id, file_path, aligned, effector_
 # 输入：无
 # 输出：manifest_df、aligned_dict、final_label_df
 def load_step4_inputs():
-    manifest_path = os.path.join(CONFIG["interim_dir"], "s3_manifest.csv")
-    aligned_path = os.path.join(CONFIG["interim_dir"], "s3_aligned_data.pkl")
-    final_label_path = os.path.join(CONFIG["interim_dir"], "s3_final_labels.csv")
+    scene_prefix = get_scene_prefix()
+    manifest_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_manifest.csv")
+    aligned_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_aligned_data.pkl")
+    final_label_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_final_labels.csv")
 
     if not os.path.exists(manifest_path):
         raise FileNotFoundError("未找到 s3_manifest.csv，请先运行阶段一第1步。")
@@ -562,9 +563,10 @@ def load_step4_inputs():
 # 输入：特征矩阵、合并后的阶段一数据表、PCA 信息
 # 输出：无
 def save_step4_outputs(feature_df, stage1_dataset_df, pca_info):
-    feature_path = os.path.join(CONFIG["interim_dir"], "s3_feature_matrix.csv")
-    dataset_path = os.path.join(CONFIG["interim_dir"], "s3_stage1_dataset.csv")
-    pca_info_path = os.path.join(CONFIG["interim_dir"], "s3_effector_pca_info.json")
+    scene_prefix = get_scene_prefix()
+    feature_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_feature_matrix.csv")
+    dataset_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_stage1_dataset.csv")
+    pca_info_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_effector_pca_info.json")
 
     save_csv(feature_df, feature_path)
     save_csv(stage1_dataset_df, dataset_path)

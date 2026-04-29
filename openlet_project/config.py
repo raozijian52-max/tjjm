@@ -19,7 +19,7 @@ CONFIG = {
     "processed_dir": "./data/processed",
 
     # 当前场景信息
-    "scene_id": "S3",
+    "scene_id": "S1",
     "task_name": "single_item_grasp",
     "object_id": "single_product_constant",
 
@@ -74,3 +74,11 @@ def ensure_dirs():
     os.makedirs(CONFIG["raw_dir"], exist_ok=True)
     os.makedirs(CONFIG["interim_dir"], exist_ok=True)
     os.makedirs(CONFIG["processed_dir"], exist_ok=True)
+
+
+# 获取当前场景文件前缀（如 S1 -> s1）
+def get_scene_prefix():
+    scene_id = str(CONFIG.get("scene_id", "S3")).strip()
+    if not scene_id:
+        scene_id = "S3"
+    return scene_id.lower()

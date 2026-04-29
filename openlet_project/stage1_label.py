@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from config import CONFIG
+from config import CONFIG, get_scene_prefix
 from utils import save_csv, save_json
 
 
@@ -14,7 +14,8 @@ from utils import save_csv, save_json
 # 输入：无
 # 输出：aligned_result_dict
 def load_aligned_data():
-    aligned_path = os.path.join(CONFIG["interim_dir"], "s3_aligned_data.pkl")
+    scene_prefix = get_scene_prefix()
+    aligned_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_aligned_data.pkl")
 
     if not os.path.exists(aligned_path):
         raise FileNotFoundError(
@@ -439,12 +440,13 @@ def merge_final_labels(auto_label_df, manual_review_path):
 # 输入：signals_df、auto_label_df、review_queue_df、final_label_df、thresholds
 # 输出：无
 def save_step3_outputs(signals_df, auto_label_df, review_queue_df, final_label_df, thresholds):
-    signals_path = os.path.join(CONFIG["interim_dir"], "s3_label_signals.csv")
-    auto_label_path = os.path.join(CONFIG["interim_dir"], "s3_auto_labels.csv")
-    review_queue_path = os.path.join(CONFIG["interim_dir"], "s3_review_queue.csv")
-    manual_template_path = os.path.join(CONFIG["interim_dir"], "s3_manual_review_template.csv")
-    final_label_path = os.path.join(CONFIG["interim_dir"], "s3_final_labels.csv")
-    threshold_path = os.path.join(CONFIG["interim_dir"], "s3_label_thresholds.json")
+    scene_prefix = get_scene_prefix()
+    signals_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_label_signals.csv")
+    auto_label_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_auto_labels.csv")
+    review_queue_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_review_queue.csv")
+    manual_template_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_manual_review_template.csv")
+    final_label_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_final_labels.csv")
+    threshold_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_label_thresholds.json")
 
     save_csv(signals_df, signals_path)
     save_csv(auto_label_df, auto_label_path)
@@ -478,7 +480,8 @@ def run_stage1_step3():
     review_queue_df = build_review_queue(signals_df, auto_label_df)
 
     # 5. 合并 final label
-    manual_review_path = os.path.join(CONFIG["interim_dir"], "s3_manual_review.csv")
+    scene_prefix = get_scene_prefix()
+    manual_review_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_manual_review.csv")
     final_label_df = merge_final_labels(auto_label_df, manual_review_path)
 
     # 6. 保存结果

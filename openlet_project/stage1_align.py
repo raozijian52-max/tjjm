@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from config import CONFIG
+from config import CONFIG, get_scene_prefix
 from stage1_read_and_manifest import read_one_h5, run_stage1_step1
 from utils import save_csv
 
@@ -307,20 +307,23 @@ def summarize_aligned_trajectory(aligned):
 # 输入：aligned_dict、summary_df
 # 输出：无
 def save_alignment_outputs(aligned_dict, summary_df):
+    scene_prefix = get_scene_prefix()
+
     # 保存详细对齐结果
-    aligned_save_path = os.path.join(CONFIG["interim_dir"], "s3_aligned_data.pkl")
+    aligned_save_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_aligned_data.pkl")
     with open(aligned_save_path, "wb") as f:
         pickle.dump(aligned_dict, f)
 
     # 保存摘要表
-    summary_save_path = os.path.join(CONFIG["interim_dir"], "s3_align_summary.csv")
+    summary_save_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_align_summary.csv")
     save_csv(summary_df, summary_save_path)
 
 # 运行阶段一第2步
 # 输入：无
 # 输出：aligned_result_dict, summary_df
 def run_stage1_step2():
-    manifest_path = os.path.join(CONFIG["interim_dir"], "s3_manifest.csv")
+    scene_prefix = get_scene_prefix()
+    manifest_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_manifest.csv")
 
     # 如果第一步结果不存在，就先自动补跑第一步
     if not os.path.exists(manifest_path):

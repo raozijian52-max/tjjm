@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from config import CONFIG
+from config import CONFIG, get_scene_prefix
 from utils import is_uuid_like, save_csv, to_python
 
 
@@ -426,8 +426,9 @@ def run_stage1_step1():
     manifest_df = build_manifest(file_list)
     raw_metadata_df = build_raw_metadata(manifest_df)
 
-    manifest_save_path = os.path.join(CONFIG["interim_dir"], "s3_manifest.csv")
-    metadata_save_path = os.path.join(CONFIG["interim_dir"], "s3_raw_metadata.csv")
+    scene_prefix = get_scene_prefix()
+    manifest_save_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_manifest.csv")
+    metadata_save_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_raw_metadata.csv")
 
     save_csv(manifest_df, manifest_save_path)
     save_csv(raw_metadata_df, metadata_save_path)
