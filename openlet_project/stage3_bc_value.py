@@ -557,9 +557,11 @@ def run_stage3_bc_value():
 
     # 1. 读取 S1-S5 对齐数据
     all_aligned, traj_info_df = load_all_scenes_aligned_data(CONFIG["scene_ids"])
+    print("数据读取成功。")
 
     # 2. 按轨迹构造 train/val split
     split_df = build_trajectory_split(traj_info_df)
+    print("训练测试集构造成功，开始训练base模型：")
 
     # 3. 训练全数据 base 模型，并在每个场景验证集上评估
     base_metrics_df, train_log_df, _, _, _ = train_and_eval_base_model(
@@ -568,18 +570,21 @@ def run_stage3_bc_value():
     )
 
     # 4. 训练 leave-one-scene 模型，并评估被留出场景
+    print("开始训练留一模型")
     leave_one_metrics_df = train_and_eval_leave_one_models(
         all_aligned=all_aligned,
         split_df=split_df,
     )
 
     # 5. 计算场景边际价值
+    print("计算场景边际价值")
     delta_df = compute_scene_delta_value(
         base_metrics_df=base_metrics_df,
         leave_one_metrics_df=leave_one_metrics_df,
     )
 
     # 6. 保存结果
+    print("计算完成！结果保存中")
     save_stage3_outputs(
         split_df=split_df,
         base_metrics_df=base_metrics_df,
