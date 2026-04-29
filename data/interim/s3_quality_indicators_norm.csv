@@ -1,3 +1,0 @@
-﻿trajectory_id,scene_id,task_name,C3_visual_completeness,C4_depth_validity,C5_joint_completeness,C6_attribute_completeness,C8_joint_anomaly_quality,C10_joint_noise_quality,C11_timestamp_consistency,C12_scene_entropy,C13_object_diversity,C14_atomic_skill_diversity,C15_motion_mode_diversity,C16_multimodal_alignment,C17_visual_joint_mi,C18_joint_coordination,C19_duplicate_uniqueness,C21_label_completeness,C22_metadata_standardization,C23_scene_description_completeness
-ff3cd4d8b3234a89bececbd6dd1eb0a4,S3,single_item_grasp,1.0,0.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,1.0,1.0
-ffedcab981ba4f19b105c7ce20c346ba,S3,single_item_grasp,0.0,1.0,0.0,1.0,0.0,0.0,1.0,1.0,1.0,0.0,1.0,0.0,1.0,0.0,1.0,1.0,1.0,1.0

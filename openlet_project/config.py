@@ -10,7 +10,7 @@ CONFIG = {
     "project_root": ".",
 
     # 原始数据目录
-    "raw_dir": "./data/raw",
+    "raw_dir": r"../../original_data/s1_单个商品抓取-抓取桌面上的商品放置在收纳箱中/h5",
 
     # 中间结果目录
     "interim_dir": "./data/interim",

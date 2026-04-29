@@ -1,3 +1,0 @@
-﻿trajectory_id,file_name,file_path,scene_id,task_name,object_id,is_uuid_file_name
-ff3cd4d8b3234a89bececbd6dd1eb0a4,ff3cd4d8b3234a89bececbd6dd1eb0a4.h5,./data/raw/ff3cd4d8b3234a89bececbd6dd1eb0a4.h5,S3,single_item_grasp,single_product_constant,True
-ffedcab981ba4f19b105c7ce20c346ba,ffedcab981ba4f19b105c7ce20c346ba.h5,./data/raw/ffedcab981ba4f19b105c7ce20c346ba.h5,S3,single_item_grasp,single_product_constant,True
