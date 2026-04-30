@@ -24,13 +24,22 @@ def load_stage1_features():
 
     for scene_id in CONFIG["scene_ids"]:
         scene_prefix = scene_id.lower()
-        path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_stage1_dataset.csv")
+
+        # 阶段一特征改为从 processed 读取 feature_matrix
+        path = os.path.join(CONFIG["processed_dir"], f"{scene_prefix}_feature_matrix.csv")
 
         if not os.path.exists(path):
-            raise FileNotFoundError(f"未找到阶段一特征文件：{path}")
+            raise FileNotFoundError(f"未找到阶段一 feature_matrix 文件：{path}")
 
         df = pd.read_csv(path)
+
+        # feature_matrix 必须至少包含 trajectory_id
+        if "trajectory_id" not in df.columns:
+            raise ValueError(f"{path} 缺少 trajectory_id 列，无法和其他阶段合并。")
+
+        # 如果 feature_matrix 内没有 scene_id，就按当前循环场景补上
         df["scene_id"] = scene_id
+
         df = add_global_id(df)
 
         dfs.append(df)
@@ -78,13 +87,21 @@ def load_stage2_quality():
 
     for scene_id in CONFIG["scene_ids"]:
         scene_prefix = scene_id.lower()
-        path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_stage2_quality_dataset.csv")
+
+        # 阶段二质量表改为从 processed 读取
+        path = os.path.join(CONFIG["processed_dir"], f"{scene_prefix}_stage2_quality_dataset.csv")
 
         if not os.path.exists(path):
             raise FileNotFoundError(f"未找到阶段二质量文件：{path}")
 
         df = pd.read_csv(path)
+
+        if "trajectory_id" not in df.columns:
+            raise ValueError(f"{path} 缺少 trajectory_id 列，无法和其他阶段合并。")
+
+        # 强制使用配置中的 scene_id，避免文件内部大小写或命名不一致
         df["scene_id"] = scene_id
+
         df = add_global_id(df)
 
         dfs.append(df)
