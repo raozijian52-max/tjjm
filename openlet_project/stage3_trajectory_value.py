@@ -10,49 +10,6 @@ from stage3_meta_value import load_all_quality_datasets, load_stage3_delta_summa
 from utils import save_csv
 
 
-# 读取阶段三 Step 3 的场景级价值预测结果
-# 输入：无
-# 输出：场景级预测表
-def load_scene_value_prediction():
-    pred_path = os.path.join(
-        CONFIG["interim_dir"],
-        "stage3_scene_value_prediction.csv"
-    )
-
-    if not os.path.exists(pred_path):
-        raise FileNotFoundError(
-            f"未找到场景级价值预测文件：{pred_path}。请先运行 run_stage3_step3.py。"
-        )
-
-    pred_df = pd.read_csv(pred_path)
-
-    required_cols = [
-        "scene_id",
-        "delta_score_mean",
-        "delta_normalized_mse_mean",
-        "delta_score_pred",
-    ]
-
-    missing_cols = [col for col in required_cols if col not in pred_df.columns]
-    if len(missing_cols) > 0:
-        raise ValueError(f"{pred_path} 缺少必要列：{missing_cols}")
-
-    return pred_df
-
-
-# 判断阶段三经验价值来自单次实验还是多 seed 稳定结果
-# 输入：无
-# 输出：字符串，表示经验价值来源
-def infer_empirical_value_source():
-    repeat_summary_path = os.path.join(
-        CONFIG["interim_dir"],
-        "stage3_repeat_delta_summary.csv"
-    )
-
-    if os.path.exists(repeat_summary_path):
-        return "repeat_seed_mean"
-
-    return "single_seed_result"
 
 
 # 构造轨迹级效能价值特征
@@ -63,9 +20,7 @@ def infer_empirical_value_source():
 # 输出：
 #   traj_value_df: 轨迹级效能价值特征表
 #   final_output_df: 质量 + 效能价值的完整阶段三输出表
-def build_trajectory_value_features(all_quality_df, delta_df, pred_df):
-    value_source = infer_empirical_value_source()
-
+def build_trajectory_value_features(all_quality_df, delta_df):
     # 统一 delta 经验值字段名
     delta_keep_cols = [
         "scene_id",
@@ -93,23 +48,10 @@ def build_trajectory_value_features(all_quality_df, delta_df, pred_df):
         "delta_normalized_mse_std": "delta_normalized_mse_emp_std",
     })
 
-    # 预测值只保留必要字段
-    pred_part = pred_df[[
-        "scene_id",
-        "delta_score_pred",
-    ]].copy()
-
     # 合并到轨迹级质量表
     final_output_df = pd.merge(
         all_quality_df,
         delta_part,
-        on="scene_id",
-        how="left",
-    )
-
-    final_output_df = pd.merge(
-        final_output_df,
-        pred_part,
         on="scene_id",
         how="left",
     )
@@ -120,30 +62,18 @@ def build_trajectory_value_features(all_quality_df, delta_df, pred_df):
         final_output_df["trajectory_id"].astype(str)
     )
 
-    # 当前研究主推荐值：使用经验留一场景价值，而不是小样本元模型预测值
-    final_output_df["delta_score_recommended"] = final_output_df["delta_score_emp"]
-
-    # 标记当前推荐值来源，后续写论文时方便说明
-    final_output_df["stage3_value_mode"] = "empirical_scene_inherited"
-    final_output_df["stage3_empirical_value_source"] = value_source
-
-    # 若预测值缺失，用经验值兜底
-    final_output_df["delta_score_pred"] = final_output_df["delta_score_pred"].fillna(
-        final_output_df["delta_score_emp"]
-    )
+    # 统一使用 Step2 多 seed 稳定版经验价值
+    final_output_df["stage3_empirical_value_source"] = "repeat_seed_mean"
 
     # 轨迹级效能价值特征表：只保留后续建模最常用字段
     keep_cols = [
         "global_id",
         "trajectory_id",
         "scene_id",
-        "task_name",
 
         "delta_score_emp",
         "delta_normalized_mse_emp",
-        "delta_score_pred",
-        "delta_score_recommended",
-        "stage3_value_mode",
+        "delta_score_positive_rate",
         "stage3_empirical_value_source",
     ]
 
@@ -175,8 +105,6 @@ def summarize_trajectory_value_features(traj_value_df):
             "n_trajectories": int(len(group)),
             "delta_score_emp": float(group["delta_score_emp"].iloc[0]),
             "delta_normalized_mse_emp": float(group["delta_normalized_mse_emp"].iloc[0]),
-            "delta_score_pred": float(group["delta_score_pred"].iloc[0]),
-            "delta_score_recommended": float(group["delta_score_recommended"].iloc[0]),
         }
 
         if "delta_score_positive_rate" in group.columns:
@@ -221,23 +149,19 @@ def run_stage3_trajectory_value():
     # 1. 读取阶段二轨迹级质量表
     all_quality_df = load_all_quality_datasets(CONFIG["scene_ids"])
 
-    # 2. 读取阶段三经验 delta，优先使用多 seed 稳定版
+    # 2. 读取阶段三经验 delta（固定使用 Step2 多 seed 稳定版）
     delta_df = load_stage3_delta_summary()
 
-    # 3. 读取阶段三元模型预测值
-    pred_df = load_scene_value_prediction()
-
-    # 4. 生成轨迹级效能价值特征
+    # 3. 生成轨迹级效能价值特征
     traj_value_df, final_output_df = build_trajectory_value_features(
         all_quality_df=all_quality_df,
         delta_df=delta_df,
-        pred_df=pred_df,
     )
 
-    # 5. 生成摘要表
+    # 4. 生成摘要表
     summary_df = summarize_trajectory_value_features(traj_value_df)
 
-    # 6. 保存
+    # 5. 保存
     save_step4_outputs(
         traj_value_df=traj_value_df,
         final_output_df=final_output_df,

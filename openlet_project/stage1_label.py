@@ -1,4 +1,6 @@
 # 文件位置：stage1_label.py
+# 说明：该模块已降级为 optional_debug / optional_motion_pattern_label。
+# 不再作为阶段三/阶段四主流程输入，仅用于探索“顺利抓取 vs 恢复型抓取”等运动模式分析。
 
 import os
 import pickle

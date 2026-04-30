@@ -1,4 +1,6 @@
 # 文件位置：stage3_meta_value.py
+# 说明：该模块用于阶段三探索性分析（质量特征与效能价值关系），
+# 不作为阶段四主实验的强预测输入来源。
 
 import os
 
@@ -33,14 +35,15 @@ def load_one_scene_quality(scene_id):
     required_cols = [
         "trajectory_id",
         "scene_id",
-        "task_name",
         "Q_score",
         "Q_completeness",
         "Q_accuracy",
         "Q_diversity",
         "Q_consistency",
-        "Q_usability",
     ]
+
+    # Q_usability 允许缺失：若字段不存在或恒定，不作为主流程强依赖
+    optional_cols = ["Q_usability"]
 
     missing_cols = [col for col in required_cols if col not in df.columns]
     if len(missing_cols) > 0:
@@ -78,8 +81,10 @@ def aggregate_quality_to_scene(all_quality_df):
         "Q_accuracy",
         "Q_diversity",
         "Q_consistency",
-        "Q_usability",
     ]
+
+    if "Q_usability" in all_quality_df.columns:
+        quality_cols.append("Q_usability")
 
     rows = []
 
@@ -118,57 +123,32 @@ def aggregate_quality_to_scene(all_quality_df):
 def load_stage3_delta_summary():
     repeat_summary_path = os.path.join(
         CONFIG["interim_dir"],
-        "stage3_repeat_delta_summary.csv" # 跑出随机种子后，改这里
+        "stage3_repeat_delta_summary.csv"
     )
 
-    single_run_path = os.path.join(
-        CONFIG["interim_dir"],
-        "stage3_scene_delta_value.csv"
-    )
+    if not os.path.exists(repeat_summary_path):
+        raise FileNotFoundError(
+            f"未找到稳定版阶段三 delta 文件：{repeat_summary_path}。"
+            "请先运行 Stage3 Step2（多随机种子重复实验）。"
+        )
 
-    # 优先使用 Step 2 的多 seed 稳定性结果
-    if os.path.exists(repeat_summary_path):
-        delta_df = pd.read_csv(repeat_summary_path)
+    delta_df = pd.read_csv(repeat_summary_path)
 
-        required_cols = [
-            "scene_id",
-            "delta_score_mean",
-            "delta_score_std",
-            "delta_score_positive_rate",
-            "delta_normalized_mse_mean",
-        ]
+    required_cols = [
+        "scene_id",
+        "delta_score_mean",
+        "delta_score_std",
+        "delta_score_positive_rate",
+        "delta_normalized_mse_mean",
+    ]
 
-        missing_cols = [col for col in required_cols if col not in delta_df.columns]
-        if len(missing_cols) > 0:
-            raise ValueError(
-                f"{repeat_summary_path} 缺少必要列：{missing_cols}"
-            )
+    missing_cols = [col for col in required_cols if col not in delta_df.columns]
+    if len(missing_cols) > 0:
+        raise ValueError(
+            f"{repeat_summary_path} 缺少必要列：{missing_cols}"
+        )
 
-        return delta_df
-
-    # 如果 Step 2 还没跑完，则临时回退到 Step 1 单次结果
-    if os.path.exists(single_run_path):
-        single_df = pd.read_csv(single_run_path)
-
-        delta_df = single_df[[
-            "scene_id",
-            "delta_score",
-            "delta_normalized_mse",
-        ]].copy()
-
-        delta_df = delta_df.rename(columns={
-            "delta_score": "delta_score_mean",
-            "delta_normalized_mse": "delta_normalized_mse_mean",
-        })
-
-        delta_df["delta_score_std"] = np.nan
-        delta_df["delta_score_positive_rate"] = np.nan
-
-        return delta_df
-
-    raise FileNotFoundError(
-        "未找到阶段三 delta 文件。请先运行 Step 1 或 Step 2。"
-    )
+    return delta_df
 
 
 # 构建场景级元模型数据表
@@ -195,19 +175,19 @@ def build_scene_value_model_table(scene_quality_df, delta_df):
 def compute_quality_value_correlation(model_df):
     target_col = "delta_score_mean"
 
-    exclude_cols = {
-        "scene_id",
-        "delta_score_mean",
-        "delta_score_std",
-        "delta_score_positive_rate",
-        "delta_normalized_mse_mean",
-        "rank_by_delta_score_mean",
-    }
+    # 相关分析只能使用阶段二质量特征和样本量，不能使用任何 delta 派生列
+    # 否则会出现目标泄漏，例如 delta_score_max 与 delta_score_mean 高相关是必然的
+    feature_cols = []
 
-    feature_cols = [
-        col for col in model_df.columns
-        if col not in exclude_cols and pd.api.types.is_numeric_dtype(model_df[col])
-    ]
+    for col in model_df.columns:
+        if col == "n_trajectories":
+            feature_cols.append(col)
+            continue
+
+        if col.startswith("Q_") and pd.api.types.is_numeric_dtype(model_df[col]):
+            # 去掉常数列，例如 Q_usability_mean 如果所有场景都为 1，则相关系数没有意义
+            if np.nanstd(model_df[col].astype(float).values) >= 1e-12:
+                feature_cols.append(col)
 
     rows = []
 
@@ -259,8 +239,12 @@ def run_ridge_loocv(model_df):
         "Q_accuracy_mean",
         "Q_diversity_mean",
         "Q_consistency_mean",
-        "Q_usability_mean",
     ]
+
+    if "Q_usability_mean" in model_df.columns:
+        usability_std = np.nanstd(model_df["Q_usability_mean"].astype(float).values)
+        if usability_std >= 1e-12:
+            feature_cols.append("Q_usability_mean")
 
     missing_cols = [col for col in feature_cols if col not in model_df.columns]
     if len(missing_cols) > 0:
