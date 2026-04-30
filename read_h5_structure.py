@@ -172,14 +172,14 @@ def save_images(h5_path, idx1, idx2, output_dir="image_output"):
 
             print(f"已保存: {save_path}")
 
-base_dir = os.path.abspath(r"D:\小yy\统计建模大赛")
+# base_dir = os.path.abspath(r"D:\小yy\统计建模大赛")
 
-directory = os.path.join(base_dir, "LET数据集-单个商品抓取")
-filepath = os.path.join(directory, "c72e728f7b4c415f8f31cb5571dde3ff.h5")
+# directory = os.path.join(base_dir, "LET数据集-单个商品抓取")
+filepath = os.path.join('.', "s4h5.h5")
 # filepath = r"..\LET数据集-单个商品抓取\a448952b49034faa851c86dec5e75926.h5"
 
 
-inspect_metadata_raw(directory)
+# inspect_metadata_raw(directory)
 identify_h5_by_content(filepath)
 # show_camera_image(filepath, 120)
 # save_images(filepath, 50, 150)

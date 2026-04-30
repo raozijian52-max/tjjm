@@ -10,15 +10,20 @@ CONFIG = {
     "project_root": ".",
 
     # 原始数据目录
-    "raw_dir": r"../../original_data/s5_小型工具装箱-将货架上的零件放置在旁边桌面上的固定位置/h5",
+    "raw_dir": r"../../original_data/s6/h5",
 
     # 中间结果目录
-    "interim_dir": "./data/interim",
+    "interim_dir": "./data/interim/s6",
 
     # 最终结果目录
     "processed_dir": "./data/processed",
 
     # 当前场景信息
+
+    "scene_id": "S1",
+    "task_name": "single_item_grasp",
+    "object_id": "single_item_constant",
+
     # "scene_id": "S2",
     # "task_name": "material_issuance_card_grabbing",
     # "object_id": "material_issuance_card",
@@ -31,9 +36,9 @@ CONFIG = {
     # "task_name": "parts_offline_into_box",
     # "object_id": "parts",
 
-    "scene_id": "S5",
-    "task_name": "small_tool_packing",
-    "object_id": "parts_on_shelf",
+    # "scene_id": "S5",
+    # "task_name": "small_tool_packing",
+    # "object_id": "parts_on_shelf",
 
 
     # 多场景列表：阶段三正式使用 S1-S5
@@ -63,6 +68,10 @@ CONFIG = {
     "bc_hidden_dims": [128, 128],
     "bc_weight_decay": 1e-5,
     "bc_num_workers": 0,
+
+    # 阶段四参数：轨迹级 out-of-fold BC 标签
+    "stage4_oof_folds": 5,
+    "stage4_bc_epochs": 25,
 }
 
 
@@ -84,7 +93,7 @@ def set_config(key, value):
 # 输入：无
 # 输出：无
 def ensure_dirs():
-    os.makedirs(CONFIG["raw_dir"], exist_ok=True)
+    # os.makedirs(CONFIG["raw_dir"], exist_ok=True)
     os.makedirs(CONFIG["interim_dir"], exist_ok=True)
     os.makedirs(CONFIG["processed_dir"], exist_ok=True)
 
