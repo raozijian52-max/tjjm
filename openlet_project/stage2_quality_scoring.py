@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -93,8 +95,44 @@ def compute_quality_scores(norm_df, weight_df):
 
     return score_df
 
-def compute_pca_robustness(norm_df, score_df):
-    """用 PCA 第一主成分和 Q_score 做相关性检查，作为稳健性参考。"""
+def compute_spearman_corr_pvalue(x, y):
+    """?? Spearman ????? p ????? scipy??? scipy ???? p ??"""
+    x = pd.Series(x, dtype=float)
+    y = pd.Series(y, dtype=float)
+    valid_mask = x.notna() & y.notna()
+    x = x[valid_mask]
+    y = y[valid_mask]
+    n = len(x)
+
+    if n < 3:
+        return None, None
+
+    try:
+        from scipy.stats import spearmanr
+
+        result = spearmanr(x.to_numpy(), y.to_numpy())
+        corr = result.statistic
+        pvalue = result.pvalue
+    except Exception:
+        corr = x.rank(method="average").corr(y.rank(method="average"), method="pearson")
+
+        if pd.isna(corr):
+            return None, None
+
+        corr_for_t = float(np.clip(corr, -0.999999, 0.999999))
+        t_value = corr_for_t * math.sqrt((n - 2) / (1.0 - corr_for_t ** 2))
+
+        # Fallback only: approximate two-sided p-value with normal tail.
+        pvalue = math.erfc(abs(t_value) / math.sqrt(2.0))
+
+    if pd.isna(corr) or pd.isna(pvalue):
+        return None, None
+
+    return float(corr), float(pvalue)
+
+
+def compute_pca_robustness(norm_df, score_df, target_cumulative_variance=0.90):
+    """??? PCA ???? Q_score ? Spearman ???????????????"""
     cols = list(INDICATOR_DIRECTIONS.keys())
     X = norm_df[cols].to_numpy(dtype=float)
     X = np.nan_to_num(X, nan=0.5, posinf=1.0, neginf=0.0)
@@ -103,19 +141,75 @@ def compute_pca_robustness(norm_df, score_df):
         return {
             "status": "not_enough_samples",
             "spearman_corr_with_entropy_q": None,
+            "spearman_pvalue_with_entropy_q": None,
             "explained_variance_ratio": None,
+            "components": [],
         }
 
     centered = X - np.mean(X, axis=0, keepdims=True)
     _, singular_values, vt = np.linalg.svd(centered, full_matrices=False)
-    pc1 = centered @ vt[0]
-    pc1 = (pc1 - np.min(pc1)) / (np.max(pc1) - np.min(pc1) + 1e-12)
 
-    corr = pd.Series(pc1).corr(score_df["Q_score"], method="spearman")
     total_variance = float(np.sum(singular_values ** 2))
-    explained = float((singular_values[0] ** 2) / total_variance) if total_variance > 1e-12 else 0.0
+    if total_variance <= 1e-12:
+        return {
+            "status": "zero_variance",
+            "spearman_corr_with_entropy_q": None,
+            "spearman_pvalue_with_entropy_q": None,
+            "explained_variance_ratio": 0.0,
+            "components": [],
+        }
+
+    explained_ratios = (singular_values ** 2) / total_variance
+    cumulative_ratios = np.cumsum(explained_ratios)
+    selected_n_components = int(np.searchsorted(cumulative_ratios, target_cumulative_variance) + 1)
+    selected_n_components = min(selected_n_components, len(explained_ratios))
+
+    component_rows = []
+    component_scores = []
+
+    for i in range(selected_n_components):
+        pc_score = centered @ vt[i]
+        pc_score = (pc_score - np.min(pc_score)) / (np.max(pc_score) - np.min(pc_score) + 1e-12)
+
+        corr, pvalue = compute_spearman_corr_pvalue(pc_score, score_df["Q_score"])
+        sign_flipped = False
+
+        # PCA ?????????????????? Q_score ?????????
+        if corr is not None and corr < 0:
+            pc_score = 1.0 - pc_score
+            corr, pvalue = compute_spearman_corr_pvalue(pc_score, score_df["Q_score"])
+            sign_flipped = True
+
+        component_scores.append(pc_score)
+        component_rows.append({
+            "component": int(i + 1),
+            "explained_variance_ratio": float(explained_ratios[i]),
+            "cumulative_explained_variance_ratio": float(cumulative_ratios[i]),
+            "spearman_corr_with_entropy_q": corr,
+            "spearman_pvalue_with_entropy_q": pvalue,
+            "sign_flipped_for_positive_corr": sign_flipped,
+        })
+
+    selected_weights = explained_ratios[:selected_n_components]
+    selected_weights = selected_weights / np.sum(selected_weights)
+    combined_score = np.sum(
+        np.vstack(component_scores) * selected_weights.reshape(-1, 1),
+        axis=0,
+    )
+    combined_corr, combined_pvalue = compute_spearman_corr_pvalue(
+        combined_score,
+        score_df["Q_score"],
+    )
+
     return {
         "status": "ok",
-        "spearman_corr_with_entropy_q": float(corr) if pd.notna(corr) else None,
-        "explained_variance_ratio": explained,
+        "target_cumulative_variance": float(target_cumulative_variance),
+        "selected_n_components": selected_n_components,
+        "selected_cumulative_explained_variance_ratio": float(cumulative_ratios[selected_n_components - 1]),
+        "spearman_corr_with_entropy_q": component_rows[0]["spearman_corr_with_entropy_q"],
+        "spearman_pvalue_with_entropy_q": component_rows[0]["spearman_pvalue_with_entropy_q"],
+        "explained_variance_ratio": component_rows[0]["explained_variance_ratio"],
+        "combined_selected_components_spearman_corr_with_entropy_q": combined_corr,
+        "combined_selected_components_spearman_pvalue_with_entropy_q": combined_pvalue,
+        "components": component_rows,
     }
