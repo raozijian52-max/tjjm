@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import KFold
 
-from config import CONFIG
+from config_template import CONFIG
 from stage3_bc_value import (
     set_seed,
     load_all_scenes_aligned_data,

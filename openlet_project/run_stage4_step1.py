@@ -1,6 +1,6 @@
 # 文件位置：run_stage4_step1.py
 
-from config import ensure_dirs
+from config_template import ensure_dirs
 from stage4_labels import run_stage4_bc_trajectory_labels
 
 
