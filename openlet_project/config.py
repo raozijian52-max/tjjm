@@ -10,10 +10,10 @@ CONFIG = {
     "project_root": ".",
 
     # 原始数据目录
-    "raw_dir": r"../../original_data/s6/h5",
+    # "raw_dir": r"../../original_data/s6/h5",
 
     # 中间结果目录
-    "interim_dir": "./data/interim/s6",
+    "interim_dir": "./data/interim",
 
     # 最终结果目录
     "processed_dir": "./data/processed",

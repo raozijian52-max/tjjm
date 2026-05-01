@@ -3,7 +3,7 @@
 import os
 import pandas as pd
 
-from config_template import CONFIG
+from config import CONFIG
 from utils import save_csv, save_json
 
 

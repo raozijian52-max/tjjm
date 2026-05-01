@@ -11,7 +11,7 @@ import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 
-from config_template import CONFIG
+from config import CONFIG
 from utils import save_csv
 
 

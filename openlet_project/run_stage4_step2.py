@@ -1,6 +1,6 @@
 # 文件位置：run_stage4_step2.py
 
-from config_template import ensure_dirs
+from config import ensure_dirs
 from stage4_modeling_table import run_stage4_build_master_table
 
 
