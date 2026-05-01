@@ -93,3 +93,30 @@ def save_stage2_outputs(indicator_df, norm_df, weight_df, score_df, norm_details
     save_json(norm_details, details_path)
     save_json(pca_info, pca_path)
     save_csv(score_df, processed_path)
+
+
+def save_stage2_pca_only(pca_info):
+    """仅覆盖保存阶段2 PCA稳健性检查结果。"""
+    scene_prefix = LAST_STAGE2_SCENE_PREFIX or "s3"
+    pca_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_pca_check.json")
+    save_json(pca_info, pca_path)
+
+
+def load_stage2_cached_norm_and_scores():
+    """读取已存在的阶段2归一化指标和质量分数，用于快速重算PCA检查。"""
+    scene_prefix = LAST_STAGE2_SCENE_PREFIX or "s3"
+
+    norm_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_indicators_norm.csv")
+    scores_path = os.path.join(CONFIG["interim_dir"], f"{scene_prefix}_quality_scores.csv")
+
+    missing = [path for path in [norm_path, scores_path] if not os.path.exists(path)]
+    if missing:
+        raise FileNotFoundError(
+            "Missing cached stage2 outputs required by PCA-only mode: "
+            + ", ".join(missing)
+            + "\nPlease run full stage2 first: python openlet_project/run_stage2.py"
+        )
+
+    norm_df = pd.read_csv(norm_path)
+    score_df = pd.read_csv(scores_path)
+    return norm_df, score_df

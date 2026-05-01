@@ -1,5 +1,10 @@
 from stage2_quality_indicators import compute_quality_indicators
-from stage2_quality_io import load_stage2_inputs, save_stage2_outputs
+from stage2_quality_io import (
+    load_stage2_cached_norm_and_scores,
+    load_stage2_inputs,
+    save_stage2_outputs,
+    save_stage2_pca_only,
+)
 from stage2_quality_scoring import (
     compute_entropy_weights,
     compute_pca_robustness,
@@ -34,6 +39,18 @@ def run_stage2_quality():
     )
 
     return indicator_df, norm_df, weight_df, score_df
+
+
+def run_stage2_pca_only():
+    """阶段2快速入口：复用已有归一化指标与质量分数，仅重算并覆盖PCA检查结果。"""
+    # 先调用一次输入加载，仅用于自动识别 scene_prefix
+    load_stage2_inputs()
+
+    norm_df, score_df = load_stage2_cached_norm_and_scores()
+    pca_info = compute_pca_robustness(norm_df, score_df)
+    save_stage2_pca_only(pca_info)
+
+    return pca_info
 
 
 if __name__ == "__main__":
