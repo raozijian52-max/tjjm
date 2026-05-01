@@ -39,9 +39,15 @@ def run_stage3_repeated(seeds=None):
         leave_one_metrics_df = leave_one_metrics_df.copy()
         delta_df = delta_df.copy()
 
+        bc_mode = CONFIG.get("bc_mode", "arm_only")
+
         base_metrics_df["seed"] = seed
         leave_one_metrics_df["seed"] = seed
         delta_df["seed"] = seed
+
+        base_metrics_df["bc_mode"] = bc_mode
+        leave_one_metrics_df["bc_mode"] = bc_mode
+        delta_df["bc_mode"] = bc_mode
 
         base_rows.append(base_metrics_df)
         leave_rows.append(leave_one_metrics_df)
@@ -76,8 +82,11 @@ def summarize_delta_stability(delta_all_df):
         delta_score = group["delta_score"].astype(float)
         delta_mse = group["delta_normalized_mse"].astype(float)
 
+        bc_mode = group["bc_mode"].iloc[0] if "bc_mode" in group.columns else CONFIG.get("bc_mode", "arm_only")
+
         row = {
             "scene_id": scene_id,
+            "bc_mode": bc_mode,
             "n_runs": int(group["seed"].nunique()),
 
             # delta_score 越大，说明场景边际价值越高

@@ -118,6 +118,77 @@ def build_trajectory_split(traj_info_df):
     return split_df
 
 
+# 根据 CONFIG["bc_mode"] 选择 BC 的状态序列和动作序列
+# 输入：单条 aligned 轨迹
+# 输出：
+#   state_seq: 形状 (T, state_dim)
+#   action_seq: 形状 (T, action_dim)
+#   若当前模式所需数据不存在，则返回 None, None
+def get_bc_state_action_sequences(aligned):
+    bc_mode = CONFIG.get("bc_mode", "arm_only")
+
+    arm_state = aligned.get("arm_state_100hz")
+    arm_action = aligned.get("arm_action_100hz")
+
+    if arm_state is None or arm_action is None:
+        return None, None
+
+    arm_state = np.asarray(arm_state, dtype=np.float32)
+    arm_action = np.asarray(arm_action, dtype=np.float32)
+
+    if arm_state.ndim != 2 or arm_action.ndim != 2:
+        return None, None
+
+    if bc_mode == "arm_only":
+        if arm_state.shape[1] != 14 or arm_action.shape[1] != 14:
+            return None, None
+
+        return arm_state, arm_action
+
+    if bc_mode == "arm_effector":
+        effector_state = aligned.get("effector_state_100hz")
+        effector_action = aligned.get("effector_action_100hz")
+
+        if effector_state is None or effector_action is None:
+            return None, None
+
+        effector_state = np.asarray(effector_state, dtype=np.float32)
+        effector_action = np.asarray(effector_action, dtype=np.float32)
+
+        if effector_state.ndim != 2 or effector_action.ndim != 2:
+            return None, None
+
+        if arm_state.shape[1] != 14 or arm_action.shape[1] != 14:
+            return None, None
+
+        if effector_state.shape[1] != 12 or effector_action.shape[1] != 12:
+            return None, None
+
+        # 确保四个序列长度一致；若有轻微差异，统一截断到最短长度
+        min_len = min(
+            len(arm_state),
+            len(arm_action),
+            len(effector_state),
+            len(effector_action),
+        )
+
+        state_seq = np.concatenate(
+            [arm_state[:min_len], effector_state[:min_len]],
+            axis=1,
+        )
+
+        action_seq = np.concatenate(
+            [arm_action[:min_len], effector_action[:min_len]],
+            axis=1,
+        )
+
+        return state_seq, action_seq
+
+    raise ValueError(
+        f"未知 bc_mode={bc_mode}，可选值为 'arm_only' 或 'arm_effector'。"
+    )
+
+
 # 从单条轨迹构造 BC 滑动窗口样本
 # 输入：
 #   aligned: 单条对齐轨迹
@@ -127,35 +198,34 @@ def build_trajectory_split(traj_info_df):
 #   X: 形状 (N, window_size * 14)
 #   y: 形状 (N, 14)
 def build_bc_samples_from_trajectory(aligned, window_size, stride):
-    arm_state = np.asarray(aligned["arm_state_100hz"], dtype=np.float32)
-    arm_action = np.asarray(aligned["arm_action_100hz"], dtype=np.float32)
+    state_seq, action_seq = get_bc_state_action_sequences(aligned)
 
-    if arm_state.ndim != 2 or arm_action.ndim != 2:
-        return np.empty((0, window_size * 14), dtype=np.float32), np.empty((0, 14), dtype=np.float32)
+    if state_seq is None or action_seq is None:
+        return np.empty((0, 0), dtype=np.float32), np.empty((0, 0), dtype=np.float32)
 
-    if arm_state.shape[1] != 14 or arm_action.shape[1] != 14:
-        return np.empty((0, window_size * 14), dtype=np.float32), np.empty((0, 14), dtype=np.float32)
+    if len(state_seq) < window_size:
+        return np.empty((0, 0), dtype=np.float32), np.empty((0, 0), dtype=np.float32)
 
-    if len(arm_state) < window_size:
-        return np.empty((0, window_size * 14), dtype=np.float32), np.empty((0, 14), dtype=np.float32)
+    state_dim = state_seq.shape[1]
+    action_dim = action_seq.shape[1]
 
     X_list = []
     y_list = []
 
     # 第 t 个样本使用 [t-window_size+1, ..., t] 的 state 预测 t 时刻 action
-    for t in range(window_size - 1, len(arm_state), stride):
-        state_window = arm_state[t - window_size + 1:t + 1]
-        action_t = arm_action[t]
+    for t in range(window_size - 1, len(state_seq), stride):
+        state_window = state_seq[t - window_size + 1:t + 1]
+        action_t = action_seq[t]
 
         # 丢弃含 NaN 的样本，避免训练不稳定
         if np.isnan(state_window).any() or np.isnan(action_t).any():
             continue
 
-        X_list.append(state_window.reshape(-1))
-        y_list.append(action_t)
+        X_list.append(state_window.reshape(window_size * state_dim))
+        y_list.append(action_t.reshape(action_dim))
 
     if len(X_list) == 0:
-        return np.empty((0, window_size * 14), dtype=np.float32), np.empty((0, 14), dtype=np.float32)
+        return np.empty((0, window_size * state_dim), dtype=np.float32), np.empty((0, action_dim), dtype=np.float32)
 
     X = np.asarray(X_list, dtype=np.float32)
     y = np.asarray(y_list, dtype=np.float32)
@@ -176,12 +246,14 @@ def build_bc_dataset(all_aligned, global_ids):
 
     window_size = CONFIG["bc_window_size"]
     stride = CONFIG["bc_sample_stride"]
+    bc_mode = CONFIG.get("bc_mode", "arm_only")
 
     for global_id in global_ids:
         aligned = all_aligned[global_id]
         X, y = build_bc_samples_from_trajectory(aligned, window_size, stride)
 
-        if len(X) == 0:
+        # X.shape[1] == 0 表示当前轨迹缺少当前 bc_mode 所需数据
+        if len(X) == 0 or X.shape[1] == 0 or y.shape[1] == 0:
             continue
 
         X_all.append(X)
@@ -192,10 +264,13 @@ def build_bc_dataset(all_aligned, global_ids):
                 "global_id": global_id,
                 "scene_id": aligned["scene_id"],
                 "sample_index_in_traj": i,
+                "bc_mode": bc_mode,
             })
 
     if len(X_all) == 0:
-        raise ValueError("没有构造出任何 BC 样本，请检查 aligned_data 内容。")
+        raise ValueError(
+            f"没有构造出任何 BC 样本，请检查 aligned_data 内容或 bc_mode={bc_mode}。"
+        )
 
     X_all = np.vstack(X_all)
     y_all = np.vstack(y_all)
@@ -555,6 +630,20 @@ def compute_scene_delta_value(base_metrics_df, leave_one_metrics_df):
 # 输入：split、base metrics、leave-one metrics、delta value、训练日志
 # 输出：无
 def save_stage3_outputs(split_df, base_metrics_df, leave_one_metrics_df, delta_df, train_log_df):
+    bc_mode = CONFIG.get("bc_mode", "arm_only")
+
+    split_df = split_df.copy()
+    base_metrics_df = base_metrics_df.copy()
+    leave_one_metrics_df = leave_one_metrics_df.copy()
+    delta_df = delta_df.copy()
+    train_log_df = train_log_df.copy()
+
+    split_df["bc_mode"] = bc_mode
+    base_metrics_df["bc_mode"] = bc_mode
+    leave_one_metrics_df["bc_mode"] = bc_mode
+    delta_df["bc_mode"] = bc_mode
+    train_log_df["bc_mode"] = bc_mode
+
     split_path = os.path.join(CONFIG["interim_dir"], "s_all_bc_split.csv")
     base_path = os.path.join(CONFIG["interim_dir"], "stage3_bc_base_metrics_by_scene.csv")
     leave_path = os.path.join(CONFIG["interim_dir"], "stage3_bc_leave_one_metrics.csv")

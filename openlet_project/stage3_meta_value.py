@@ -175,8 +175,8 @@ def build_scene_value_model_table(scene_quality_df, delta_df):
 def compute_quality_value_correlation(model_df):
     target_col = "delta_score_mean"
 
-    # 相关分析只能使用阶段二质量特征和样本量，不能使用任何 delta 派生列
-    # 否则会出现目标泄漏，例如 delta_score_max 与 delta_score_mean 高相关是必然的
+    # 相关分析只能使用阶段二质量聚合特征和样本量；
+    # 不能使用 delta_score_min/max/std 等目标派生字段，否则会造成目标泄漏。
     feature_cols = []
 
     for col in model_df.columns:
@@ -185,8 +185,10 @@ def compute_quality_value_correlation(model_df):
             continue
 
         if col.startswith("Q_") and pd.api.types.is_numeric_dtype(model_df[col]):
-            # 去掉常数列，例如 Q_usability_mean 如果所有场景都为 1，则相关系数没有意义
-            if np.nanstd(model_df[col].astype(float).values) >= 1e-12:
+            values = model_df[col].astype(float).values
+
+            # 常数列没有相关性意义，例如 Q_usability_mean 全部为1
+            if np.nanstd(values) >= 1e-12:
                 feature_cols.append(col)
 
     rows = []
@@ -231,7 +233,8 @@ def compute_quality_value_correlation(model_df):
 def run_ridge_loocv(model_df):
     target_col = "delta_score_mean"
 
-    # 为了降低过拟合，默认只使用均值型质量特征 + n_trajectories
+    # 小样本 n=5 下，主元模型只使用均值型质量特征 + 轨迹数；
+    # std/min/max 仅用于解释性相关分析，不进入 Ridge 主模型。
     feature_cols = [
         "n_trajectories",
         "Q_score_mean",

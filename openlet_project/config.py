@@ -69,6 +69,13 @@ CONFIG = {
     "bc_weight_decay": 1e-5,
     "bc_num_workers": 0,
 
+    # 阶段三/四 BC 输入输出模式
+    # 主实验使用 "arm_only"：
+    #   输入过去5帧 arm_state，输出当前 arm_action
+    # 可选稳健性实验使用 "arm_effector"：
+    #   输入过去5帧 [arm_state, effector_state]，输出当前 [arm_action, effector_action]
+    "bc_mode": "arm_only",
+
     # 阶段四参数：轨迹级 out-of-fold BC 标签
     "stage4_oof_folds": 5,
     "stage4_bc_epochs": 25,

@@ -1,10 +1,11 @@
 # 文件位置：run_stage3.py
 
 import argparse
+import os
 
 import pandas as pd
 
-from config import ensure_dirs
+from config import CONFIG, ensure_dirs
 from stage3_bc_value import run_stage3_bc_value
 from stage3_meta_value import run_stage3_meta_value
 from stage3_repeat import run_stage3_repeated
@@ -34,7 +35,9 @@ def parse_args():
 def run_bc_step():
     run_stage3_bc_value()
 
-    split_df = pd.read_csv("./data/interim/s_all_bc_split.csv")
+    split_path = os.path.join(CONFIG["interim_dir"], "s_all_bc_split.csv")
+    split_df = pd.read_csv(split_path)
+
     print("[Step1:bc] done")
     print(split_df.groupby(["scene_id", "split"]).size())
 
@@ -60,7 +63,8 @@ def main():
     ensure_dirs()
 
     if args.step == "all":
-        run_bc_step()
+        # 正式结果以多 seed repeat 为准；
+        # 单独 bc 仅作为调试入口，不在 all 中重复运行，避免额外耗时。
         run_repeat_step(args.seeds)
         run_meta_step()
         run_trajectory_step()

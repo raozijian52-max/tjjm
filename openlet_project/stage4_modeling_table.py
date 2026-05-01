@@ -156,7 +156,8 @@ def load_stage3_value_features():
     if len(missing_cols) > 0:
         raise ValueError(f"阶段三轨迹级价值表缺少字段：{missing_cols}")
 
-    # 主实验只使用经验边际价值，不使用小样本元模型预测值
+    # 主实验只使用多 seed 留一场景得到的经验边际效能价值；
+    # 不使用 delta_score_pred，因为当前只有5个场景，元模型预测泛化不稳定。
     stage3_cols = ["delta_score_emp"]
 
     keep_cols = ["global_id", "trajectory_id", "scene_id"] + stage3_cols
