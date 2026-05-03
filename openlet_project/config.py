@@ -83,7 +83,8 @@ CONFIG = {
     "stage4_random_repeat_seeds": [42, 2024, 2025, 3407, 4096],
     # 无泄漏版本建议：在固定 test 后，仅使用 pool 内重估的 stage3 场景价值文件
     # 如未提供该文件，会默认读取 interim_dir 下的 stage3_repeat_delta_summary_11scene_multiseed.csv
-    "stage4_stage3_delta_path": "./data/interim/stage3_repeat_delta_summary_11scene_multiseed.csv",
+    # "stage4_stage3_delta_path": "./data/interim/stage3_repeat_delta_summary_11scene_multiseed.csv",
+    "stage4_stage3_delta_path": "./data/interim/stage3_repeat_delta_summary.csv",
 }
 
 
