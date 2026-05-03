@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 
 import numpy as np
 import pandas as pd
@@ -263,6 +263,39 @@ def run_stage4_prepare_pool_and_stage3(
     return split_df
 
 
+def _append_rows_atomic(target_path: str, new_df: pd.DataFrame):
+    """追加写入 CSV，并通过临时文件 + rename 实现原子覆盖。"""
+    if new_df is None or len(new_df) == 0:
+        return
+
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    if os.path.exists(target_path):
+        old_df = pd.read_csv(target_path)
+        out_df = pd.concat([old_df, new_df], axis=0, ignore_index=True)
+    else:
+        out_df = new_df.copy()
+
+    tmp_path = target_path + ".tmp"
+    out_df.to_csv(tmp_path, index=False, encoding="utf-8-sig")
+    os.replace(tmp_path, target_path)
+
+
+def _load_completed_jobs(metrics_partial_path: str) -> Set[Tuple[str, float, int]]:
+    """从部分结果中读取已完成 job 键：(strategy, ratio, run_seed)。"""
+    if not os.path.exists(metrics_partial_path):
+        return set()
+
+    mdf = pd.read_csv(metrics_partial_path)
+    needed = {"strategy", "ratio", "run_seed"}
+    if not needed.issubset(set(mdf.columns)):
+        return set()
+
+    done = set()
+    for _, r in mdf.iterrows():
+        done.add((str(r["strategy"]), float(r["ratio"]), int(r["run_seed"])))
+    return done
+
+
 def run_stage4_curation_eval(
     smoke_test: bool = False,
     ratio_grid: Tuple[float, ...] = None,
@@ -305,106 +338,119 @@ def run_stage4_curation_eval(
     eval_std = _compute_eval_action_std(all_aligned, pool_df["global_id"].tolist())
     print("[Stage4:eval] eval action std prepared")
 
+    # 默认优先仅跑用户指定的 5 个策略
     strategies = [
-        "full", "random", "high_Q_global", "high_Q_stratified", "high_delta",
-        "hybrid_Q_delta", "hybrid_consistency_delta", "low_Q_score", "low_delta"
+        "full", "random", "high_delta", "high_Q_stratified", "hybrid_Q_delta"
     ]
 
     if smoke_test:
         strategies = ["full", "random"]
         print(f"[Stage4:eval] smoke strategies={strategies}")
     else:
-        print(f"[Stage4:eval] full strategies count={len(strategies)}")
+        print(f"[Stage4:eval] selected strategies count={len(strategies)} -> {strategies}")
 
     selection_rows = []
     metric_rows = []
     per_scene_rows = []
 
-    full_nmse = None
-    random_ref = {}
+    partial_selection_path = os.path.join(CONFIG["interim_dir"], "stage4_curation_selection_partial.csv")
+    partial_metrics_path = os.path.join(CONFIG["interim_dir"], "stage4_curation_metrics_partial.csv")
+    partial_per_scene_path = os.path.join(CONFIG["interim_dir"], "stage4_curation_per_scene_metrics_partial.csv")
 
-    total_jobs = 0
+    completed_jobs = _load_completed_jobs(partial_metrics_path)
+
+    all_jobs = []
     for strategy in strategies:
         ratios = (1.0,) if strategy == "full" else cfg.ratio_grid
         seeds = cfg.random_repeat_seeds if strategy == "random" else cfg.run_seeds
-        total_jobs += len(ratios) * len(seeds)
-
-    print(f"[Stage4:eval] total training jobs={total_jobs}")
-    job_idx = 0
-
-    for strategy in strategies:
-        ratios = (1.0,) if strategy == "full" else cfg.ratio_grid
-        seeds = cfg.random_repeat_seeds if strategy == "random" else cfg.run_seeds
-
         for ratio in ratios:
             for run_seed in seeds:
-                job_idx += 1
-                print(f"[Stage4:eval] job {job_idx}/{total_jobs} strategy={strategy} ratio={ratio} seed={run_seed}")
+                all_jobs.append((strategy, float(ratio), int(run_seed)))
 
-                selected = _select_ids(pool_df, strategy, ratio, run_seed)
-                train_ids = selected["global_id"].tolist()
-                print(f"[Stage4:eval] selected trajectories={len(train_ids)}")
+    pending_jobs = [j for j in all_jobs if j not in completed_jobs]
 
-                g_m, s_df, n_windows = _train_eval_once(all_aligned, train_ids, test_ids, eval_std)
-                print(
-                    f"[Stage4:eval] done job {job_idx}/{total_jobs}, "
-                    f"nmse={g_m['test_nmse']:.6f}, score={g_m['test_imitation_score']:.6f}, windows={n_windows}"
-                )
+    print(f"[Stage4:eval] total jobs={len(all_jobs)}, completed={len(completed_jobs)}, pending={len(pending_jobs)}")
 
-                if strategy == "full":
-                    full_nmse = g_m["test_nmse"]
-                if strategy == "random":
-                    random_ref.setdefault(ratio, []).append(g_m["test_nmse"])
+    for job_idx, (strategy, ratio, run_seed) in enumerate(pending_jobs, start=1):
+        print(f"[Stage4:eval] pending job {job_idx}/{len(pending_jobs)} strategy={strategy} ratio={ratio} seed={run_seed}")
 
-                for _, r in selected.iterrows():
-                    selection_rows.append(
-                        {
-                            "strategy": strategy,
-                            "ratio": ratio,
-                            "run_seed": run_seed,
-                            "global_id": r["global_id"],
-                            "trajectory_id": r["trajectory_id"],
-                            "scene_id": r["scene_id"],
-                            "selected_rank": int(r["selected_rank"]),
-                            "selection_score": r["selection_score"],
-                        }
-                    )
+        selected = _select_ids(pool_df, strategy, ratio, run_seed)
+        train_ids = selected["global_id"].tolist()
+        print(f"[Stage4:eval] selected trajectories={len(train_ids)}")
 
-                metric_rows.append(
-                    {
-                        "strategy": strategy,
-                        "ratio": ratio,
-                        "run_seed": run_seed,
-                        "n_train_trajectories": int(len(train_ids)),
-                        "n_train_windows": int(n_windows),
-                        "test_nmse": g_m["test_nmse"],
-                        "test_imitation_score": g_m["test_imitation_score"],
-                        "test_mae": g_m["test_mae"],
-                    }
-                )
+        g_m, s_df, n_windows = _train_eval_once(all_aligned, train_ids, test_ids, eval_std)
+        print(
+            f"[Stage4:eval] done pending job {job_idx}/{len(pending_jobs)}, "
+            f"nmse={g_m['test_nmse']:.6f}, score={g_m['test_imitation_score']:.6f}, windows={n_windows}"
+        )
 
-                for _, srow in s_df.iterrows():
-                    per_scene_rows.append(
-                        {
-                            "strategy": strategy,
-                            "ratio": ratio,
-                            "run_seed": run_seed,
-                            **srow.to_dict(),
-                        }
-                    )
+        this_selection_rows = []
+        for _, r in selected.iterrows():
+            this_selection_rows.append(
+                {
+                    "strategy": strategy,
+                    "ratio": ratio,
+                    "run_seed": run_seed,
+                    "global_id": r["global_id"],
+                    "trajectory_id": r["trajectory_id"],
+                    "scene_id": r["scene_id"],
+                    "selected_rank": int(r["selected_rank"]),
+                    "selection_score": r["selection_score"],
+                }
+            )
 
-    selection_df = pd.DataFrame(selection_rows)
-    metrics_df = pd.DataFrame(metric_rows)
-    per_scene_df = pd.DataFrame(per_scene_rows)
+        this_metric_rows = [
+            {
+                "strategy": strategy,
+                "ratio": ratio,
+                "run_seed": run_seed,
+                "n_train_trajectories": int(len(train_ids)),
+                "n_train_windows": int(n_windows),
+                "test_nmse": g_m["test_nmse"],
+                "test_imitation_score": g_m["test_imitation_score"],
+                "test_mae": g_m["test_mae"],
+            }
+        ]
 
-    rand_mean_by_ratio = {k: float(np.mean(v)) for k, v in random_ref.items()}
+        this_per_scene_rows = []
+        for _, srow in s_df.iterrows():
+            this_per_scene_rows.append(
+                {
+                    "strategy": strategy,
+                    "ratio": ratio,
+                    "run_seed": run_seed,
+                    **srow.to_dict(),
+                }
+            )
+
+        # 内存聚合（本次运行）
+        selection_rows.extend(this_selection_rows)
+        metric_rows.extend(this_metric_rows)
+        per_scene_rows.extend(this_per_scene_rows)
+
+        # 关键：每个 job 完成后实时保存到 partial（支持中断续跑）
+        _append_rows_atomic(partial_selection_path, pd.DataFrame(this_selection_rows))
+        _append_rows_atomic(partial_metrics_path, pd.DataFrame(this_metric_rows))
+        _append_rows_atomic(partial_per_scene_path, pd.DataFrame(this_per_scene_rows))
+
+    # 汇总时以 partial 全量为准（含历史已完成 + 本次新增）
+    selection_df = pd.read_csv(partial_selection_path) if os.path.exists(partial_selection_path) else pd.DataFrame(selection_rows)
+    metrics_df = pd.read_csv(partial_metrics_path) if os.path.exists(partial_metrics_path) else pd.DataFrame(metric_rows)
+    per_scene_df = pd.read_csv(partial_per_scene_path) if os.path.exists(partial_per_scene_path) else pd.DataFrame(per_scene_rows)
+
+    random_nmse_df = metrics_df[metrics_df["strategy"] == "random"].groupby("ratio", as_index=False)["test_nmse"].mean()
+    rand_mean_by_ratio = {float(r["ratio"]): float(r["test_nmse"]) for _, r in random_nmse_df.iterrows()}
+
+    full_nmse_series = metrics_df[(metrics_df["strategy"] == "full") & (metrics_df["ratio"] == 1.0)]["test_nmse"]
+    full_nmse = float(full_nmse_series.mean()) if len(full_nmse_series) > 0 else np.nan
+
     metrics_df["relative_to_random_nmse"] = metrics_df.apply(
-        lambda x: (rand_mean_by_ratio.get(x["ratio"], np.nan) - x["test_nmse"]) / rand_mean_by_ratio.get(x["ratio"], np.nan)
-        if pd.notna(rand_mean_by_ratio.get(x["ratio"], np.nan)) else np.nan,
+        lambda x: (rand_mean_by_ratio.get(float(x["ratio"]), np.nan) - x["test_nmse"]) / rand_mean_by_ratio.get(float(x["ratio"]), np.nan)
+        if pd.notna(rand_mean_by_ratio.get(float(x["ratio"]), np.nan)) else np.nan,
         axis=1,
     )
     metrics_df["relative_to_full_nmse"] = metrics_df["test_nmse"].apply(
-        lambda v: (full_nmse - v) / full_nmse if (full_nmse is not None and full_nmse > 0) else np.nan
+        lambda v: (full_nmse - v) / full_nmse if (pd.notna(full_nmse) and full_nmse > 0) else np.nan
     )
 
     summary_df = (
