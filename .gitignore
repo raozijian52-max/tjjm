@@ -1,2 +1,45 @@
-/openlet_project/data
-/openlet_project/__pycache__
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor settings
+.vscode/
+.idea/
+
+# Project data and generated outputs
+/data/
+/openlet_project/data/
+/服务器数据备份/
+
+# Large raw/intermediate dataset artifacts
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tbz2
+*.zip
+
+# Generated analysis outputs
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+*.xlsx
+
+# OS files
+.DS_Store
+Thumbs.db
