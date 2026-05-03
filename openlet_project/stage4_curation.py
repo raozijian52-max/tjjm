@@ -13,6 +13,7 @@ from stage3_bc_value import (
     train_bc_model,
     predict_bc,
 )
+from stage3_repeat import run_stage3_repeated_on_pool
 from utils import save_csv
 
 
@@ -198,17 +199,36 @@ def _train_eval_once(all_aligned: Dict, train_ids: List[str], test_ids: List[str
     return global_metrics, pd.DataFrame(per_scene_rows), int(len(X_train))
 
 
-def run_stage4_curation():
+def run_stage4_prepare_pool_and_stage3():
+    cfg = CurationConfig()
+    set_seed(CONFIG["random_state"])
+
+    _, traj_info_df = load_all_scenes_aligned_data(CONFIG["scene_ids"])
+    split_df = _stratified_split_test_pool(traj_info_df, cfg)
+    save_csv(split_df, os.path.join(CONFIG["interim_dir"], "stage4_curation_split.csv"))
+
+    pool_ids = split_df[split_df["split"] == "pool"]["global_id"].tolist()
+    seeds = list(CONFIG.get("stage4_run_seeds", list(cfg.run_seeds)))
+
+    run_stage3_repeated_on_pool(pool_global_ids=pool_ids, seeds=seeds)
+
+    return split_df
+
+
+def run_stage4_curation_eval():
     cfg = CurationConfig()
     set_seed(CONFIG["random_state"])
 
     all_aligned, traj_info_df = load_all_scenes_aligned_data(CONFIG["scene_ids"])
 
-    split_df = _stratified_split_test_pool(traj_info_df, cfg)
-    save_csv(split_df, os.path.join(CONFIG["interim_dir"], "stage4_curation_split.csv"))
+    split_path = os.path.join(CONFIG["interim_dir"], "stage4_curation_split.csv")
+    if not os.path.exists(split_path):
+        raise FileNotFoundError(f"未找到 split 文件：{split_path}，请先运行 prepare 步骤。")
+
+    split_df = pd.read_csv(split_path)
 
     qdf = _load_stage2_quality(CONFIG["scene_ids"])
-    delta_path = CONFIG.get("stage4_stage3_delta_path", os.path.join(CONFIG["interim_dir"], "stage3_repeat_delta_summary_11scene_multiseed.csv"))
+    delta_path = CONFIG.get("stage4_stage3_delta_path", os.path.join(CONFIG["interim_dir"], "stage3_repeat_pool_only_delta_summary.csv"))
     sdf = _load_stage3_scene_delta(delta_path)
 
     scores_df = _build_score_table(split_df, qdf, sdf)
@@ -316,3 +336,8 @@ def run_stage4_curation():
     save_csv(summary_df, os.path.join(CONFIG["interim_dir"], "stage4_curation_summary.csv"))
 
     return split_df, scores_df, selection_df, metrics_df, per_scene_df, summary_df
+
+
+def run_stage4_curation():
+    run_stage4_prepare_pool_and_stage3()
+    return run_stage4_curation_eval()

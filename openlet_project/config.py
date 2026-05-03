@@ -42,7 +42,7 @@ CONFIG = {
 
 
     # 多场景列表：阶段三正式使用 S1-S5
-    "scene_ids": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10"], # ["S1", "S2", "S3", "S4", "S5"]
+    "scene_ids": ["S1", "S2", "S3", "S4", "S5"], # ["S1", "S2", "S3", "S4", "S5"]
 
     # 当前场景数据规模，仅保留给阶段一检查使用
     "expected_num_trajectories": 33,
@@ -62,12 +62,12 @@ CONFIG = {
     # 阶段三 BC 参数
     "bc_window_size": 5,
     "bc_sample_stride": 2,
-    "bc_batch_size": 8192,
+    "bc_batch_size": 512,
     "bc_epochs": 35,
     "bc_learning_rate": 1e-3,
     "bc_hidden_dims": [128, 128],
     "bc_weight_decay": 1e-5,
-    "bc_num_workers": 8,
+    "bc_num_workers": 0,
 
     # 阶段三/四 BC 输入输出模式
     # 主实验使用 "arm_only"：

@@ -76,7 +76,7 @@ def run_stage3_repeated(seeds=None):
         leave_all_df=leave_all_df,
         delta_all_df=delta_all_df,
         delta_summary_df=delta_summary_df,
-        prefix="stage3_repeat_pool_only",
+        prefix="stage3_repeat",
     )
 
     return base_all_df, leave_all_df, delta_all_df, delta_summary_df
