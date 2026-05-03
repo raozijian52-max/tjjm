@@ -76,9 +76,14 @@ CONFIG = {
     #   输入过去5帧 [arm_state, effector_state]，输出当前 [arm_action, effector_action]
     "bc_mode": "arm_only",
 
-    # 阶段四参数：轨迹级 out-of-fold BC 标签
-    "stage4_oof_folds": 5,
-    "stage4_bc_epochs": 25,
+    # 阶段四参数：双轨数据策展验证
+    "stage4_test_ratio": 0.2,
+    "stage4_ratio_grid": [0.1, 0.25, 0.5, 0.75, 1.0],
+    "stage4_run_seeds": [42, 2024, 2025],
+    "stage4_random_repeat_seeds": [42, 2024, 2025, 3407, 4096],
+    # 无泄漏版本建议：在固定 test 后，仅使用 pool 内重估的 stage3 场景价值文件
+    # 如未提供该文件，会默认读取 interim_dir 下的 stage3_repeat_delta_summary_11scene_multiseed.csv
+    "stage4_stage3_delta_path": "./data/interim/stage3_repeat_delta_summary_11scene_multiseed.csv",
 }
 
 

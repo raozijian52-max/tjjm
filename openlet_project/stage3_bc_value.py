@@ -118,6 +118,45 @@ def build_trajectory_split(traj_info_df):
     return split_df
 
 
+# 在给定轨迹池内按场景划分 train/val（用于无泄漏阶段四）
+# 输入：轨迹信息表、可用 global_id 列表
+# 输出：仅包含 available_ids 的 split_df
+def build_trajectory_split_from_ids(traj_info_df, available_ids):
+    available_ids = set(available_ids)
+
+    if len(available_ids) == 0:
+        raise ValueError("available_ids 为空，无法划分 train/val。")
+
+    pool_df = traj_info_df[traj_info_df["global_id"].isin(available_ids)].copy()
+    if pool_df.empty:
+        raise ValueError("available_ids 与 traj_info_df 无交集。")
+
+    rng = np.random.RandomState(CONFIG["random_state"])
+    split_rows = []
+
+    for scene_id, scene_df in pool_df.groupby("scene_id"):
+        ids = scene_df["global_id"].tolist()
+        rng.shuffle(ids)
+
+        if len(ids) == 1:
+            train_ids = set(ids)
+            val_ids = set(ids)
+        else:
+            n_train = int(len(ids) * CONFIG["train_ratio"])
+            n_train = min(max(1, n_train), len(ids) - 1)
+            train_ids = set(ids[:n_train])
+            val_ids = set(ids[n_train:])
+
+        for global_id in ids:
+            split_rows.append({
+                "global_id": global_id,
+                "scene_id": scene_id,
+                "split": "train" if global_id in train_ids else "val",
+            })
+
+    return pd.DataFrame(split_rows)
+
+
 # 根据 CONFIG["bc_mode"] 选择 BC 的状态序列和动作序列
 # 输入：单条 aligned 轨迹
 # 输出：
