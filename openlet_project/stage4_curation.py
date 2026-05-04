@@ -31,6 +31,7 @@ def _build_curation_config(
     ratio_grid: Tuple[float, ...] = None,
     run_seeds: Tuple[int, ...] = None,
     random_repeat_seeds: Tuple[int, ...] = None,
+    fast_mode: bool = False,
 ) -> CurationConfig:
     cfg = CurationConfig()
     cfg.test_ratio = float(CONFIG.get("stage4_test_ratio", cfg.test_ratio))
@@ -44,6 +45,12 @@ def _build_curation_config(
         cfg.run_seeds = tuple(run_seeds)
     if random_repeat_seeds is not None:
         cfg.random_repeat_seeds = tuple(random_repeat_seeds)
+
+    # fast mode：优先压缩任务规模
+    if fast_mode:
+        cfg.ratio_grid = (0.25, 0.75)
+        cfg.run_seeds = (42,)
+        cfg.random_repeat_seeds = (42, 2024, 2025)
 
     # smoke test：最小可跑配置，不依赖 config 开关
     if smoke_test:
@@ -243,12 +250,14 @@ def run_stage4_prepare_pool_and_stage3(
     ratio_grid: Tuple[float, ...] = None,
     run_seeds: Tuple[int, ...] = None,
     random_repeat_seeds: Tuple[int, ...] = None,
+    fast_mode: bool = False,
 ):
     cfg = _build_curation_config(
         smoke_test=smoke_test,
         ratio_grid=ratio_grid,
         run_seeds=run_seeds,
         random_repeat_seeds=random_repeat_seeds,
+        fast_mode=fast_mode,
     )
     print("[Stage4:prepare] start")
     print(f"[Stage4:prepare] random_state={CONFIG['random_state']}, test_ratio={cfg.test_ratio}")
@@ -312,12 +321,14 @@ def run_stage4_curation_eval(
     ratio_grid: Tuple[float, ...] = None,
     run_seeds: Tuple[int, ...] = None,
     random_repeat_seeds: Tuple[int, ...] = None,
+    fast_mode: bool = False,
 ):
     cfg = _build_curation_config(
         smoke_test=smoke_test,
         ratio_grid=ratio_grid,
         run_seeds=run_seeds,
         random_repeat_seeds=random_repeat_seeds,
+        fast_mode=fast_mode,
     )
     print("[Stage4:eval] start")
     print(
@@ -374,7 +385,12 @@ def run_stage4_curation_eval(
     all_jobs = []
     for strategy in strategies:
         ratios = (1.0,) if strategy == "full" else cfg.ratio_grid
-        seeds = cfg.random_repeat_seeds if strategy == "random" else cfg.run_seeds
+        if strategy == "full":
+            seeds = (42,)
+        elif strategy == "random":
+            seeds = cfg.random_repeat_seeds
+        else:
+            seeds = cfg.run_seeds
         for ratio in ratios:
             for run_seed in seeds:
                 all_jobs.append((strategy, float(ratio), int(run_seed)))
@@ -492,10 +508,12 @@ def run_stage4_curation(
     run_seeds: Tuple[int, ...] = None,
     random_repeat_seeds: Tuple[int, ...] = None,
     run_prepare: bool = False,
+    fast_mode: bool = True,
 ):
     """
     默认仅执行 eval，复用已存在的 stage4 split 与 stage3 pool-only 结果。
     当 run_prepare=True 时，才会重新切分并重跑 stage3 pool-only。
+    fast_mode=True 时启用压缩任务规模配置。
     """
     if run_prepare:
         run_stage4_prepare_pool_and_stage3(
@@ -503,6 +521,7 @@ def run_stage4_curation(
             ratio_grid=ratio_grid,
             run_seeds=run_seeds,
             random_repeat_seeds=random_repeat_seeds,
+            fast_mode=fast_mode,
         )
     else:
         print("[Stage4] skip prepare (run_prepare=False), will reuse existing split/stage3 outputs")
@@ -512,4 +531,5 @@ def run_stage4_curation(
         ratio_grid=ratio_grid,
         run_seeds=run_seeds,
         random_repeat_seeds=random_repeat_seeds,
+        fast_mode=fast_mode,
     )
