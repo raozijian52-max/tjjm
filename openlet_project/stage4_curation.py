@@ -21,7 +21,7 @@ from utils import save_csv
 class CurationConfig:
     test_ratio: float = 0.2
     split_seed: int = 42
-    ratio_grid: Tuple[float, ...] = (0.1, 0.25, 0.5, 0.75, 1.0)
+    ratio_grid: Tuple[float, ...] = (0.25, 0.5, 0.75)
     run_seeds: Tuple[int, ...] = (42, 2024, 2025)
     random_repeat_seeds: Tuple[int, ...] = (42, 2024, 2025, 3407, 4096)
 
@@ -141,10 +141,13 @@ def _build_score_table(split_df: pd.DataFrame, qdf: pd.DataFrame, sdf: pd.DataFr
             raise ValueError(f"{col} 存在缺失，无法继续策展")
 
     df["z_Q_score"] = _zscore(df["Q_score"])
+    df["z_Q_accuracy"] = _zscore(df["Q_accuracy"])
     df["z_Q_consistency"] = _zscore(df["Q_consistency"])
     df["z_delta_score_emp"] = _zscore(df["delta_score_emp"])
     df["hybrid_score_Q"] = 0.5 * df["z_Q_score"] + 0.5 * df["z_delta_score_emp"]
     df["hybrid_score_consistency"] = 0.5 * df["z_Q_consistency"] + 0.5 * df["z_delta_score_emp"]
+    df["hybrid_score_Q08_delta02"] = 0.8 * df["z_Q_score"] + 0.2 * df["z_delta_score_emp"]
+    df["hybrid_score_accuracy08_delta02"] = 0.8 * df["z_Q_accuracy"] + 0.2 * df["z_delta_score_emp"]
 
     return df
 
@@ -184,6 +187,14 @@ def _select_ids(pool_df: pd.DataFrame, strategy: str, ratio: float, seed: int) -
     elif strategy == "hybrid_consistency_delta":
         selected = pool_df.nlargest(n_pick, "hybrid_score_consistency").copy()
         selected["selection_score"] = selected["hybrid_score_consistency"]
+
+    elif strategy == "hybrid_Q08_delta02":
+        selected = pool_df.nlargest(n_pick, "hybrid_score_Q08_delta02").copy()
+        selected["selection_score"] = selected["hybrid_score_Q08_delta02"]
+
+    elif strategy == "hybrid_accuracy08_delta02":
+        selected = pool_df.nlargest(n_pick, "hybrid_score_accuracy08_delta02").copy()
+        selected["selection_score"] = selected["hybrid_score_accuracy08_delta02"]
 
     elif strategy == "low_Q_score":
         selected = pool_df.nsmallest(n_pick, "Q_score").copy()
@@ -338,9 +349,10 @@ def run_stage4_curation_eval(
     eval_std = _compute_eval_action_std(all_aligned, pool_df["global_id"].tolist())
     print("[Stage4:eval] eval action std prepared")
 
-    # 默认优先仅跑用户指定的 5 个策略
+    # 仅跑对照 + 新增轻量双轨策略
     strategies = [
-        "full", "random", "high_delta", "high_Q_stratified", "hybrid_Q_delta"
+        "full", "random", "high_Q_global", "high_Q_stratified", "hybrid_Q_delta",
+        "hybrid_Q08_delta02", "hybrid_accuracy08_delta02"
     ]
 
     if smoke_test:
