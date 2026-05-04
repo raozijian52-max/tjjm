@@ -491,13 +491,22 @@ def run_stage4_curation(
     ratio_grid: Tuple[float, ...] = None,
     run_seeds: Tuple[int, ...] = None,
     random_repeat_seeds: Tuple[int, ...] = None,
+    run_prepare: bool = False,
 ):
-    run_stage4_prepare_pool_and_stage3(
-        smoke_test=smoke_test,
-        ratio_grid=ratio_grid,
-        run_seeds=run_seeds,
-        random_repeat_seeds=random_repeat_seeds,
-    )
+    """
+    默认仅执行 eval，复用已存在的 stage4 split 与 stage3 pool-only 结果。
+    当 run_prepare=True 时，才会重新切分并重跑 stage3 pool-only。
+    """
+    if run_prepare:
+        run_stage4_prepare_pool_and_stage3(
+            smoke_test=smoke_test,
+            ratio_grid=ratio_grid,
+            run_seeds=run_seeds,
+            random_repeat_seeds=random_repeat_seeds,
+        )
+    else:
+        print("[Stage4] skip prepare (run_prepare=False), will reuse existing split/stage3 outputs")
+
     return run_stage4_curation_eval(
         smoke_test=smoke_test,
         ratio_grid=ratio_grid,
