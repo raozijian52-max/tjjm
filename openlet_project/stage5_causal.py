@@ -127,7 +127,9 @@ def get_confounder_cols(causal_df: pd.DataFrame, with_scene_fe: bool) -> Tuple[L
     ]
     for c in numeric_covs:
         if c in model_df.columns and pd.api.types.is_numeric_dtype(model_df[c]):
-            confounder_cols.append(c)
+            # 避免整列全缺失触发 sklearn imputing 警告刷屏
+            if model_df[c].notna().sum() > 0:
+                confounder_cols.append(c)
 
     if "task_name" in model_df.columns:
         task_d = pd.get_dummies(model_df["task_name"].astype(str), prefix="task", dtype=float)
@@ -259,7 +261,9 @@ def run_one(df: pd.DataFrame, tcol: str, ycol: str, group_label: str, with_scene
     for r in [raw, psm, ipw, wls]:
         r.update({
             "treatment": tcol,
+            "analysis_variant": "with_scene" if with_scene_fe else "no_scene",
             "outcome": ycol,
+            "effect_type": r["method"].upper(),
             "heterogeneity_group": group_label,
             "with_scene_fe": int(with_scene_fe),
             "direction": "beneficial" if r["estimate"] < 0 else ("harmful" if r["estimate"] > 0 else "neutral"),

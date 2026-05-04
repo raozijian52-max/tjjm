@@ -48,18 +48,20 @@ def main():
     print(treatment_info_df.to_string(index=False))
 
     if not effect_df.empty:
-        core = effect_df[
-            [
-                "treatment",
-                "analysis_variant",
-                "method",
-                "outcome",
-                "effect_type",
-                "estimate",
-                "n_used",
-                "direction",
-            ]
-        ].sort_values(["treatment", "analysis_variant", "method", "outcome"])
+        need_cols = [
+            "treatment",
+            "analysis_variant",
+            "method",
+            "outcome",
+            "effect_type",
+            "estimate",
+            "n_used",
+            "direction",
+        ]
+        core_cols = [c for c in need_cols if c in effect_df.columns]
+        core = effect_df[core_cols].sort_values(
+            [c for c in ["treatment", "analysis_variant", "method", "outcome"] if c in core_cols]
+        )
         print("\n[Stage5] effect estimates (core)")
         print(core.to_string(index=False))
 
